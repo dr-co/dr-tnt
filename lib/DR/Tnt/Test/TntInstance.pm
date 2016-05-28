@@ -68,6 +68,9 @@ sub new {
 }
 
 sub port { $_[0]->{-port} }
+sub is_started {
+    return $_[0]->log =~ /entering the event loop/;
+}
 
 sub log {
     my ($self) = @_;
