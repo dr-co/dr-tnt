@@ -4,6 +4,7 @@ use warnings;
 
 use feature 'state';
 package DR::Tnt::Test;
+use DR::Tnt::Test::TntInstance;
 use IO::Socket::INET;
 use Test::More;
 use base qw(Exporter);
@@ -11,6 +12,7 @@ our @EXPORT = qw(
     free_port
     tarantool_version
     tarantool_version_check
+    start_tarantool
 );
 
 
@@ -42,7 +44,7 @@ sub tarantool_version_check($) {
         goto FAIL unless $v[$i] >= $p[$i];
     }
 
-    goto FAIL unless @v == @p;
+    goto FAIL unless @v >= @p;
 
     OK:
         return;
@@ -57,8 +59,6 @@ sub tarantool_version_check($) {
 
 }
 
-sub start_tarantool {
-}
 
 
 sub free_port() {
@@ -77,4 +77,8 @@ sub free_port() {
     }
 }
 
+sub start_tarantool {
+    my %opts = @_;
+    DR::Tnt::Test::TntInstance->new(%opts);
+}
 1;
