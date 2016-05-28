@@ -67,6 +67,8 @@ sub new {
     die "Can't start tarantool";
 }
 
+sub port { $_[0]->{-port} }
+
 sub log {
     my ($self) = @_;
     return '' unless -r $self->{-log};
