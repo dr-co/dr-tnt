@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 4;
+use Test::More tests    => 3;
 use Encode qw(decode encode);
 
 
@@ -18,10 +18,13 @@ BEGIN {
     binmode $builder->todo_output,    ":utf8";
 
     use_ok 'DR::Tnt::Test';
-    use_ok 'IO::Socket::INET';
     tarantool_version_check(1.6);
 }
 
-my $t = start_tarantool -lua => 't/010-comon/lua/run-test.lua';
-isa_ok $t => DR::Tnt::Test::TntInstance::;
-like $t->log, qr{Hello, world}, 'logfile';
+
+my $port = free_port;
+
+my $t = start_tarantool -port => $port, -lua => 't/010-comon/lua/run.lua';
+ok $t, 'Instance created';
+like $t->log, qr{entering the event loop}, 'tarantool started';
+

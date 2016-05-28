@@ -6,6 +6,7 @@ package DR::Tnt::Test::TntInstance;
 use File::Temp;
 use File::Spec::Functions 'rel2abs', 'catfile';
 use Time::HiRes ();
+use IO::Socket::INET;
 use POSIX;
 
 my @started;
@@ -36,7 +37,19 @@ sub new {
 
     if ($self->{pid} = fork) {
         push @started => $self;
-        Time::HiRes::sleep .1;
+        for (1 .. 10) {
+            Time::HiRes::sleep .1;
+            last unless $self->{-port};
+            
+            next unless IO::Socket::INET->new(
+                PeerHost => '127.0.0.1',
+                PeerPort => $self->{-port},
+                Proto    => 'tcp',
+                (($^O eq 'MSWin32') ? () : (ReuseAddr => 1)),
+            );
+            last if $self->log =~ /entering the event loop/;
+        }
+
         return $self;
     }
 
