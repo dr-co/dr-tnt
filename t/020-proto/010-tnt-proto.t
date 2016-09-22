@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib t/lib);
 
-use Test::More tests    => 37;
+use Test::More tests    => 54;
 use Encode qw(decode encode);
 
 
@@ -89,4 +89,38 @@ for my $m ('insert', 'replace') {
         is $o->{SYNC}, $sync, 'sync';
         test_substrings $pkt;
     }
+}
+
+for my $sync (int rand 1_000_000) {
+    my $del = DR::Tnt::Proto::del $sync, 123, 'a';
+    ok $del, 'DELETE body';
+    
+    my ($o, $tail) = DR::Tnt::Proto::response $del;
+    isa_ok $o => 'HASH';
+    is $tail, '', 'empty tail';
+
+    is $o->{CODE}, 'DELETE', 'code';
+    is $o->{SYNC}, $sync, 'sync';
+    is_deeply $o->{KEY}, [ 'a' ], 'key';
+    is $o->{SPACE_ID}, 123, 'space';
+    
+    test_substrings $del;
+}
+
+for my $sync (int rand 1_000_000) {
+    my $up = DR::Tnt::Proto::update $sync, 123, 'a', [ [ '=', 23, 22 ] ];
+    ok $up => 'UPDATE body';
+    
+    my ($o, $tail) = DR::Tnt::Proto::response $up;
+    isa_ok $o => 'HASH';
+    is $tail, '', 'empty tail';
+
+    is $o->{CODE}, 'UPDATE', 'code';
+    is $o->{SYNC}, $sync, 'sync';
+    is_deeply $o->{KEY}, [ 'a' ], 'key';
+    is $o->{SPACE_ID}, 123, 'space';
+
+    is_deeply $o->{TUPLE}, [[qw(= 23 22)]], 'tuple';
+
+    test_substrings $up;
 }
