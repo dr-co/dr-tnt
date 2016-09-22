@@ -28,7 +28,7 @@ sub parse_greeting {
     my ($str) = @_;
     croak "strlen is not 128 bytes" unless $str and 128 == length $str;
 
-    my $salt = decode_base64(substr $str, 64, 44);
+    my $salt = eval { decode_base64(substr $str, 64, 44); } || undef;
     my $grstr = substr $str, 0, 64;
 
     my ($title, $v, $pt, $uid) = split /\s+/, $grstr, 5;

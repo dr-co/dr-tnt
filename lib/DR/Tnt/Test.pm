@@ -79,6 +79,8 @@ sub free_port() {
 
 sub start_tarantool {
     my %opts = @_;
+    $opts{-port} = free_port;
     DR::Tnt::Test::TntInstance->new(%opts);
 }
+
 1;
