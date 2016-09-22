@@ -43,8 +43,6 @@ sub parse_greeting {
     }
 }
 
-our $DECODE_UTF8    = 0;
-
 my (%resolve, %tresolve);
 
 my %iter = (
@@ -134,9 +132,7 @@ sub raw_response($) {
         my $len_item = DR::Msgpuck::msgunpack_check $sp;
         croak sprintf('Broken %s section of response', $_)
             unless $len_item and $len_item + $off <= length $response;
-        push @r => $DECODE_UTF8 ?
-            DR::Msgpuck::msgunpack_utf8 $sp :
-            DR::Msgpuck::msgunpack $sp;
+        push @r => DR::Msgpuck::msgunpack $sp;
         $off += $len_item;
 
         if ($_ eq 2 and $off == length $response) {
