@@ -12,7 +12,7 @@ use Data::Dumper;
 
 has fh  =>
     is      => 'rw',
-    isa     => 'Maybe[Object]',
+    isa     => 'Maybe[Any]',
     trigger => sub {
         my ($self) = @_;
         $self->_active_sync({});
@@ -50,7 +50,7 @@ sub next_sync {
 sub connect {
     my ($self, $cb) = @_;
 
-    if (any { $_ eq $self->state } 'init') {
+    if (any { $_ eq $self->state } 'init', 'pause') {
         $self->fh(undef);
         $self->state('connecting');
         $self->_connect(sub {
@@ -82,12 +82,14 @@ sub handshake {
     $self->state('handshake');
     $self->greeting(undef);
 
-    $self->sread(128, sub {
+    $self->_handshake(sub {
         my ($state, $message, $hs) = @_;
         unless ($state eq 'OK') {
-            pop;
-            goto \&$cb;
+            $self->state('pause');
+            $cb->($state => $message);
+            return;
         }
+
         my $greeting = DR::Tnt::Proto::parse_greeting($hs);
         if ($greeting and $greeting->{salt}) {
             $self->greeting($greeting);
@@ -95,9 +97,12 @@ sub handshake {
             $cb->(OK => 'handshake was read and parsed');
             return;
         }
+
         $self->state('pause');
-        $cb->(error => 'wrong tarantool handshake');
+        $cb->(ER_HANDSHAKE => 'wrong tarantool handshake');
     });
+    return;
+
 }
 
 sub send_request {
@@ -110,7 +115,6 @@ sub send_request {
         return;
     }
 
-    my $sync = $self->next_sync;
  
     state $r = {
         select      => \&DR::Tnt::Proto::select,
@@ -124,7 +128,6 @@ sub send_request {
     };
 
     croak "unknown method $name" unless exists $r->{$name};
-
 
     state $ra = {
         auth    => sub {
@@ -140,6 +143,7 @@ sub send_request {
     
     @args = $ra->{$name}->($self, @args) if exists $ra->{$name};
     
+    my $sync = $self->next_sync;
     my $pkt = $r->{$name}->($sync, @args);
 
     $self->swrite($pkt, sub {
@@ -193,18 +197,32 @@ sub sread {
 
 sub check_rbuf {
     my ($self) = @_;
-    my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf);
-    return unless defined $res;
-    $self->rbuf($tail);
 
-    my $sync = $res->{SYNC};
-    if (exists $self->_watcher->{$sync}) {
-        my $list = delete $self->_watcher->{$sync};
-        delete $self->_active_sync->{$sync};
-        for my $cb (@$list) {
-            $cb->(OK => 'Response received', $res);
+    my $no = 0;
+    while (length $self->rbuf) {
+        my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf);
+        return unless defined $res;
+
+        warn sprintf "%s pkt found, rbuf %s tail %s", ++$no, length $self->rbuf, length $tail;
+        $self->rbuf($tail);
+
+        my $sync = $res->{SYNC};
+        if (exists $self->_watcher->{$sync}) {
+            my $list = delete $self->_watcher->{$sync};
+            delete $self->_active_sync->{$sync};
+            for my $cb (@$list) {
+                $cb->(OK => 'Response received', $res);
+            }
+            next;
         }
-    }
+
+        unless (exists $self->_active_sync->{$sync}) {
+            warn "Unexpected tarantool reply $sync";
+            next;
+        }
+
+        $self->_active_sync->{$sync} = $res;
+    };
     return;
 }
 __PACKAGE__->meta->make_immutable;

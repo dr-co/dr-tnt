@@ -73,6 +73,7 @@ $c->wait_response(1, sub {
     like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
 });
 
+
 note 'schema collision';
 $c->send_request(ping => 7000, sub {
     my ($code, $message, $sync) = @_;

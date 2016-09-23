@@ -36,6 +36,18 @@ sub _connect {
         sprintf 'Can not connect to %s:%s', $self->ll->host, $self->ll->port);
     return;
 }
+    
+sub _handshake {
+    my ($self, $cb) = @_;
+    $self->sread(128, sub {
+        my ($state, $message, $hs) = @_;
+        unless ($state eq 'OK') {
+            pop;
+            goto \&$cb;
+        }
+        $cb->(OK => 'handshake was read', $hs);
+    });
+}
 
 sub _sread {
     my ($self, $len, $cb) = @_;
