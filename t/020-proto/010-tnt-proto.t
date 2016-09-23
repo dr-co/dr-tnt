@@ -39,7 +39,7 @@ sub test_substrings($) {
 
 for my $sync (int rand 1_000_000) {
 
-    my $ping = DR::Tnt::Proto::ping($sync);
+    my $ping = DR::Tnt::Proto::ping($sync, undef);
     ok $ping, 'PING body';
 
     my ($o, $tail) = DR::Tnt::Proto::response $ping;
@@ -51,7 +51,7 @@ for my $sync (int rand 1_000_000) {
 }
 
 for my $sync (int rand 1_000_000) {
-    my $select = DR::Tnt::Proto::select $sync, 123, 345, [ 'a', 'b' ], 10, 20, 'EQ';
+    my $select = DR::Tnt::Proto::select $sync, undef, 123, 345, [ 'a', 'b' ], 10, 20, 'EQ';
     ok $select, 'SELECT body';
 
     my ($o, $tail) = DR::Tnt::Proto::response $select;
@@ -75,7 +75,7 @@ for my $m ('insert', 'replace') {
         my $pkt;
         for my $mt ("DR::Tnt::Proto::$m") {
             no strict 'refs';
-            $pkt = $mt->($sync, 11, [ 'a', 'b', 'c' ]);
+            $pkt = $mt->($sync, undef, 11, [ 'a', 'b', 'c' ]);
         }
         ok $pkt, uc ($m) . ' body';
 
@@ -92,7 +92,7 @@ for my $m ('insert', 'replace') {
 }
 
 for my $sync (int rand 1_000_000) {
-    my $del = DR::Tnt::Proto::del $sync, 123, 'a';
+    my $del = DR::Tnt::Proto::del $sync, undef, 123, 'a';
     ok $del, 'DELETE body';
     
     my ($o, $tail) = DR::Tnt::Proto::response $del;
@@ -108,7 +108,7 @@ for my $sync (int rand 1_000_000) {
 }
 
 for my $sync (int rand 1_000_000) {
-    my $up = DR::Tnt::Proto::update $sync, 123, 'a', [ [ '=', 23, 22 ] ];
+    my $up = DR::Tnt::Proto::update $sync, undef, 123, 'a', [ [ '=', 23, 22 ] ];
     ok $up => 'UPDATE body';
     
     my ($o, $tail) = DR::Tnt::Proto::response $up;

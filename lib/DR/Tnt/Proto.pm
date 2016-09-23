@@ -79,6 +79,7 @@ BEGIN {
         IPROTO_SERVER_ID           => 0x02,
         IPROTO_LSN                 => 0x03,
         IPROTO_TIMESTAMP           => 0x04,
+        IPROTO_SCHEMA_ID           => 0x05,
         IPROTO_SPACE_ID            => 0x10,
         IPROTO_INDEX_ID            => 0x11,
         IPROTO_LIMIT               => 0x12,
@@ -186,13 +187,26 @@ sub request($$) {
     return msgpack(length $pkt) . $pkt;
 }
 
-sub _call_lua($$$) {
-    my ($sync, $proc, $tuple) = @_;
+sub _mk_header($$$) {
+    my ($code, $sync, $schema_id) = @_;
+   
+
+    return {
+        IPROTO_SYNC, $sync,
+        IPROTO_CODE, $code,
+    } unless defined $schema_id;
+
+    return {
+        IPROTO_SYNC,        $sync,
+        IPROTO_CODE,        $code,
+        IPROTO_SCHEMA_ID,   $schema_id
+    }
+}
+
+sub _call_lua($$$$) {
+    my ($sync, $schema_id, $proc, $tuple) = @_;
     request
-        {
-            IPROTO_SYNC,            $sync,
-            IPROTO_CODE,            IPROTO_CALL,
-        },
+        _mk_header(IPROTO_CALL, $sync, $schema_id),
         {
             IPROTO_FUNCTION_NAME,   $proc,
             IPROTO_TUPLE,           $tuple,
@@ -200,23 +214,20 @@ sub _call_lua($$$) {
     ;
 }
 
-sub call_lua($$@) {
-    my ($sync, $proc, @args) = @_;
-    return _call_lua($sync, $proc, \@args);
+sub call_lua($$$@) {
+    my ($sync, $schema_id, $proc, @args) = @_;
+    return _call_lua($sync, $schema_id, $proc, \@args);
 }
 
-sub insert($$$) {
-    my ($sync, $space, $tuple) = @_;
+sub insert($$$$) {
+    my ($sync, $schema_id, $space, $tuple) = @_;
 
     $tuple = [ $tuple ] unless ref $tuple;
     croak "Cant convert HashRef to tuple" if 'HASH' eq ref $tuple;
 
     if (looks_like_number $space) {
         return request
-            {
-                IPROTO_SYNC,        $sync,
-                IPROTO_CODE,        IPROTO_INSERT,
-            },
+            _mk_header(IPROTO_INSERT, $sync, $schema_id),
             {
                 IPROTO_SPACE_ID,    $space,
                 IPROTO_TUPLE,       $tuple,
@@ -225,21 +236,18 @@ sub insert($$$) {
     }
 
     # HACK
-    _call_lua($sync, "box.space.$space:insert", $tuple);
+    _call_lua($sync, $schema_id, "box.space.$space:insert", $tuple);
 }
 
-sub replace($$$) {
-    my ($sync, $space, $tuple) = @_;
+sub replace($$$$) {
+    my ($sync, $schema_id, $space, $tuple) = @_;
 
     $tuple = [ $tuple ] unless ref $tuple;
     croak "Cant convert HashRef to tuple" if 'HASH' eq ref $tuple;
 
     if (looks_like_number $space) {
         return request
-            {
-                IPROTO_SYNC,        $sync,
-                IPROTO_CODE,        IPROTO_REPLACE,
-            },
+            _mk_header(IPROTO_REPLACE, $sync, $schema_id),
             {
                 IPROTO_SPACE_ID,    $space,
                 IPROTO_TUPLE,       $tuple,
@@ -247,20 +255,17 @@ sub replace($$$) {
         ;
     }
     # HACK
-    _call_lua($sync, "box.space.$space:replace", $tuple);
+    _call_lua($sync, $schema_id, "box.space.$space:replace", $tuple);
 }
-sub del($$$) {
-    my ($sync, $space, $key) = @_;
+sub del($$$$) {
+    my ($sync, $schema_id, $space, $key) = @_;
 
     $key = [ $key ] unless ref $key;
     croak "Cant convert HashRef to key" if 'HASH' eq ref $key;
 
     if (looks_like_number $space) {
         return request
-            {
-                IPROTO_SYNC,        $sync,
-                IPROTO_CODE,        IPROTO_DELETE,
-            },
+            _mk_header(IPROTO_DELETE, $sync, $schema_id),
             {
                 IPROTO_SPACE_ID,    $space,
                 IPROTO_KEY,         $key,
@@ -268,22 +273,19 @@ sub del($$$) {
         ;
     }
     # HACK
-    _call_lua($sync, "box.space.$space:delete", $key);
+    _call_lua($sync, $schema_id, "box.space.$space:delete", $key);
 }
 
 
-sub update($$$$) {
-    my ($sync, $space, $key, $ops) = @_;
+sub update($$$$$) {
+    my ($sync, $schema_id, $space, $key, $ops) = @_;
     croak 'Oplist must be Arrayref' unless 'ARRAY' eq ref $ops;
     $key = [ $key ] unless ref $key;
     croak "Cant convert HashRef to key" if 'HASH' eq ref $key;
 
     if (looks_like_number $space) {
         return request
-            {
-                IPROTO_SYNC,        $sync,
-                IPROTO_CODE,        IPROTO_UPDATE,
-            },
+            _mk_header(IPROTO_UPDATE, $sync, $schema_id),
             {
                 IPROTO_SPACE_ID,    $space,
                 IPROTO_KEY,         $key,
@@ -292,11 +294,11 @@ sub update($$$$) {
         ;
     }
     # HACK
-    _call_lua($sync, "box.space.$space:update", [ $key, $ops ]);
+    _call_lua($sync, $schema_id, "box.space.$space:update", [ $key, $ops ]);
 }
 
-sub select($$$$;$$$) {
-    my ($sync, $space, $index, $key, $limit, $offset, $iterator) = @_;
+sub select($$$$$;$$$) {
+    my ($sync, $schema_id, $space, $index, $key, $limit, $offset, $iterator) = @_;
     $iterator = 'EQ' unless defined $iterator;
     $offset ||= 0;
     $limit  = 0xFFFF_FFFF unless defined $limit;
@@ -311,10 +313,7 @@ sub select($$$$;$$$) {
 
     if (looks_like_number $space and looks_like_number $index) {
         return request
-            {
-                IPROTO_SYNC,        $sync,
-                IPROTO_CODE,        IPROTO_SELECT,
-            },
+            _mk_header(IPROTO_SELECT, $sync, $schema_id),
             {
                 IPROTO_KEY,         $key,
                 IPROTO_SPACE_ID,    $space,
@@ -327,7 +326,7 @@ sub select($$$$;$$$) {
     }
 
     # HACK
-    _call_lua($sync, "box.space.$space.index.$index:select", [
+    _call_lua($sync, $schema_id, "box.space.$space.index.$index:select", [
                 $key,
                 {
                     offset => $offset,
@@ -338,13 +337,10 @@ sub select($$$$;$$$) {
     );
 }
 
-sub ping($) {
-    my ($sync) = @_;
+sub ping($$) {
+    my ($sync, $schema_id) = @_;
     request
-        {
-            IPROTO_SYNC,    $sync,
-            IPROTO_CODE,    IPROTO_PING,
-        },
+        _mk_header(IPROTO_PING, $sync, $schema_id),
         {
         }
     ;
