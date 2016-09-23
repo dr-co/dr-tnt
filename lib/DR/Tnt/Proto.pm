@@ -28,7 +28,7 @@ sub parse_greeting {
     my ($str) = @_;
     croak "strlen is not 128 bytes" unless $str and 128 == length $str;
 
-    my $salt = eval { substr decode_base64(substr $str, 64), 0, 20; } || undef;
+    my $salt = eval { substr decode_base64(substr $str, 64, 44), 0, 20; } || undef;
     my $grstr = substr $str, 0, 64;
 
     my ($title, $v, $pt, $uid) = split /\s+/, $grstr, 5;
@@ -371,19 +371,6 @@ sub auth($$$$$) {
             IPROTO_TUPLE,       [ 'chap-sha1', $hash ],
         }
     ;
-}
-
-sub handshake($) {
-    my ($h) = @_;
-    croak 'Wrong handshake length' unless length $h == 128;
-    my $version = substr $h, 0, 64;
-    my $salt =    substr MIME::Base64::decode_base64(substr $h, 64), 0, 20;
-
-    for ($version) {
-        s/\0.*//;
-        s/^tarantool:?\s*//i;
-    }
-    return $version, $salt;
 }
 
 1;
