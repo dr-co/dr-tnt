@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 36;
+use Test::More tests    => 45;
 use Encode qw(decode encode);
 
 
@@ -21,13 +21,15 @@ BEGIN {
 my $ti = start_tarantool
     -lua    => 't/030-low-level/lua/easy.lua';
 isa_ok $ti => DR::Tnt::Test::TntInstance::, 'tarantool';
-ok $ti->is_started, 'test tarantool started';
+
+diag $ti->log unless
+    ok $ti->is_started, 'test tarantool started';
 
 my $c = new DR::Tnt::LowLevel
     host            => 'localhost',
     port            => $ti->port,
-    user            => 'bla',
-    password        => 'ble',
+    user            => 'testrwe',
+    password        => 'test',
     connector_class => 'DR::Tnt::LowLevel::Connector::Sync',
 ;
 isa_ok $c => DR::Tnt::LowLevel::, 'Low level connector';
@@ -73,11 +75,11 @@ $c->wait_response(1, sub {
 
 note 'schema collision';
 $c->send_request(ping => 7000, sub {
-   my ($code, $message, $sync) = @_;
-   is $code, 'OK', 'ping was send';
-   is $c->connector->state, 'ready', 'state';
-   isnt $sync, 1, 'next_sync';
-   ok exists $c->connector->_active_sync->{$sync}, 'active sync';
+    my ($code, $message, $sync) = @_;
+    is $code, 'OK', 'ping was send';
+    is $c->connector->state, 'ready', 'state';
+    isnt $sync, 1, 'next_sync';
+    ok exists $c->connector->_active_sync->{$sync}, 'active sync';
     
     $c->wait_response($sync, sub {
         my ($code, $message, $resp) = @_;
@@ -93,3 +95,22 @@ $c->send_request(ping => 7000, sub {
     });
 });
 
+
+note 'auth test';
+$c->send_request(auth => undef, sub {
+    my ($code, $message, $sync) = @_;
+    is $code, 'OK', 'auth was send';
+    is $c->connector->state, 'ready', 'state';
+    isnt $sync, 1, 'next_sync';
+    ok exists $c->connector->_active_sync->{$sync}, 'active sync';
+
+    $c->wait_response($sync, sub {
+        my ($code, $message, $resp) = @_;
+        is $code => 'OK', 'auth response';
+
+        isa_ok $resp => 'HASH';
+        is $resp->{SYNC}, $sync, 'sync';
+        is $resp->{CODE}, 0, 'auth passed'; 
+        like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
+    });
+});

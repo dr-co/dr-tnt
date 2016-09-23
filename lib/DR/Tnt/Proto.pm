@@ -28,7 +28,7 @@ sub parse_greeting {
     my ($str) = @_;
     croak "strlen is not 128 bytes" unless $str and 128 == length $str;
 
-    my $salt = eval { decode_base64(substr $str, 64, 44); } || undef;
+    my $salt = eval { substr decode_base64(substr $str, 64), 0, 20; } || undef;
     my $grstr = substr $str, 0, 64;
 
     my ($title, $v, $pt, $uid) = split /\s+/, $grstr, 5;
@@ -356,20 +356,16 @@ sub strxor($$) {
     return pack 'C*', @x;
 }
 
-sub auth($$$$) {
-    my ($sync, $user, $password, $salt) = @_;
+sub auth($$$$$) {
+    my ($sync, $schema_id, $user, $password, $salt) = @_;
 
     my $hpasswd = sha1 $password;
     my $hhpasswd = sha1 $hpasswd;
     my $scramble = sha1 $salt . $hhpasswd;
 
-
     my $hash = strxor $hpasswd, $scramble;
     request
-        {
-            IPROTO_SYNC, $sync,
-            IPROTO_CODE, IPROTO_AUTH,
-        },
+        _mk_header(IPROTO_AUTH, $sync, $schema_id),
         {
             IPROTO_USER_NAME,   $user,
             IPROTO_TUPLE,       [ 'chap-sha1', $hash ],

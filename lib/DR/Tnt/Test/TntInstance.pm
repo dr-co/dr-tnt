@@ -9,8 +9,6 @@ use Time::HiRes ();
 use IO::Socket::INET;
 use POSIX;
 
-my @started;
-
 sub new {
     my ($class, %opts) = @_;
 
@@ -36,7 +34,6 @@ sub new {
     }
 
     if ($self->{pid} = fork) {
-        push @started => $self;
         for (1 .. 10) {
             Time::HiRes::sleep .1;
             last unless $self->{-port};
@@ -95,19 +92,18 @@ sub pid { $_[0]->{pid} };
 sub kill {
     my ($self, $sig) = @_;
     return unless $self->pid;
-    $sig ||= '-TERM';
-    kill $sig, $self->pid;
+    $sig ||= 'TERM';
+    unless (kill $sig, $self->pid) {
+        warn sprintf "Can't kill -$sig %s\n", $self->pid;
+    }
     delete $self->{pid};
 }
 
 sub DESTROY {
     my ($self) = @_;
-    $self->kill('-KILL');
+    $self->kill('KILL');
     $self->clean;
 }
 
-END {
-    $_->kill('-KILL') for @started;
-}
 
 1;

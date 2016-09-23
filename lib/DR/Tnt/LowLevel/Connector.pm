@@ -8,6 +8,7 @@ use DR::Tnt::Proto;
 use List::MoreUtils 'any';
 use feature 'state';
 use Carp;
+use Data::Dumper;
 
 has fh  =>
     is      => 'rw',
@@ -25,26 +26,11 @@ has fh  =>
         }
     };
 
-has ll  =>
-    is          => 'ro',
-    isa         => 'DR::Tnt::LowLevel',
-    weak_ref    => 1,
-    required    => 1;
+has ll  => is => 'ro', isa => 'DR::Tnt::LowLevel', weak_ref => 1, required => 1;
 
-has greeting =>
-    is          => 'ro',
-    isa         => 'Maybe[HashRef]',
-    writer      => '_set_greeting';
-
-has state =>
-    is          => 'ro',
-    isa         => 'Str',
-    default     => 'init',
-    writer      => '_set_state';
-
-
+has greeting        => is => 'rw', isa => 'Maybe[HashRef]';
+has state           => is => 'rw', isa => 'Str', default => 'init';
 has rbuf            => is => 'rw', isa => 'Str', default => '';
-
 has _last_sync      => is => 'rw', isa => 'Int', default => 0;
 has _active_sync    => is => 'rw', isa => 'HashRef', default => sub {{}};
 has _watcher        => is => 'rw', isa => 'HashRef', default => sub {{}};
@@ -66,13 +52,13 @@ sub connect {
 
     if (any { $_ eq $self->state } 'init') {
         $self->fh(undef);
-        $self->_set_state('connecting');
+        $self->state('connecting');
         $self->_connect(sub {
             my ($state) = @_;
             if ($state eq 'OK') {
-                $self->_set_state('connected');
+                $self->state('connected');
             } else {
-                $self->_set_state('pause');
+                $self->state('pause');
                 $self->fh(undef);
             }
             goto &$cb;
@@ -87,14 +73,14 @@ sub handshake {
     my ($self, $cb) = @_;
 
     unless ($self->state eq 'connected') {
-        $self->_set_state('fatal');
+        $self->state('fatal');
         $self->fh(undef);
         $cb->(fatal => 'can not read handshake in state: ' . $self->state);
         return;
     }
 
-    $self->_set_state('handshake');
-    $self->_set_greeting(undef);
+    $self->state('handshake');
+    $self->greeting(undef);
 
     $self->sread(128, sub {
         my ($state, $message, $hs) = @_;
@@ -104,12 +90,12 @@ sub handshake {
         }
         my $greeting = DR::Tnt::Proto::parse_greeting($hs);
         if ($greeting and $greeting->{salt}) {
-            $self->_set_greeting($greeting);
-            $self->_set_state('ready');
+            $self->greeting($greeting);
+            $self->state('ready');
             $cb->(OK => 'handshake was read and parsed');
             return;
         }
-        $self->_set_state('pause');
+        $self->state('pause');
         $cb->(error => 'wrong tarantool handshake');
     });
 }
@@ -139,12 +125,27 @@ sub send_request {
 
     croak "unknown method $name" unless exists $r->{$name};
 
+
+    state $ra = {
+        auth    => sub {
+            my $self = shift;
+            return (
+                @_,
+                $self->ll->user,
+                $self->ll->password,
+                $self->greeting->{salt},
+            );
+        }
+    };
+    
+    @args = $ra->{$name}->($self, @args) if exists $ra->{$name};
+    
     my $pkt = $r->{$name}->($sync, @args);
 
     $self->swrite($pkt, sub {
         my ($state) = @_;
         unless ($state eq 'OK') {
-            $self->_set_state('pause');
+            $self->state('pause');
             $self->fh(undef);
             goto \&cb;
         }

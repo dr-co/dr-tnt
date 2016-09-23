@@ -45,7 +45,7 @@ for (+ note 'greating') {
     my $gp = DR::Tnt::Proto::parse_greeting $grstr;
     isa_ok $gp => 'HASH';
     like $gp->{proto} => qr{binary}i, 'proto';
-    is length $gp->{salt}, 32, 'len of salt';
+    is length $gp->{salt}, 20, 'len of salt';
     like $gp->{title}, qr{tarantool}i, 'title';
     like $gp->{uuid}, qr/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i, 'uuid';
 }
