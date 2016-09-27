@@ -114,14 +114,13 @@ sub connect {
         $self->fh(undef);
         $self->state('connecting');
         $self->_connect(sub {
-            my ($state) = @_;
+            my ($state, $message) = @_;
             if ($state eq 'OK') {
                 $self->state('connected');
             } else {
                 # TODO connection error
-                $self->last_error([ER_CONNECT => 'Can not connect to host']);
+                $self->last_error([$state, $message // "Can't connect to remote host"]);
                 $self->state('error');
-                $self->fh(undef);
             }
             goto &$cb;
         });
@@ -132,10 +131,8 @@ sub connect {
 }
 
 sub socket_error {
-
     my ($self, $message) = @_;
-
-    $self->last_error([ER_SOCKET => $message]);
+    $self->last_error([ER_SOCKET => $message // 'Socket error']);
     $self->state('error');
 }
 
@@ -206,9 +203,9 @@ sub send_request {
         my $pkt = $r->{$name}->($sync, @args);
 
         $self->send_pkt($pkt, sub {
-            my ($state) = @_;
+            my ($state, $message) = @_;
             unless ($state eq 'OK') {
-                $self->last_error([ER_WRITE_SOCKET => 'Can not send data to socket']);
+                $self->last_error([$state, $message]);
                 $self->state('error');
                 $self->fh(undef);
                 goto &$cb;

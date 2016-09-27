@@ -12,12 +12,13 @@ extends 'DR::Tnt::LowLevel::Connector';
 sub _connect {
     my ($self, $cb) = @_;
 
-
     my $fh;
     
     if ($self->ll->host eq 'unix' or $self->ll->host eq 'unix/') {
         $fh = IO::Socket::UNIX->new(
-        )
+            Type            => SOCK_STREAM,
+            Peer            => $self->ll->port,
+        );
     } else {
         $fh = IO::Socket::INET->new(
             PeerHost        => $self->ll->host,
@@ -26,14 +27,14 @@ sub _connect {
         );
     }
 
-    if ($fh) {
-        $self->fh($fh);
-        $cb->(OK => 'Socket connected');
+    unless ($fh) {
+        $cb->(ER_SOCKET => $!);
         return;
     }
 
-    $cb->(error =>
-        sprintf 'Can not connect to %s:%s', $self->ll->host, $self->ll->port);
+    $self->fh($fh);
+    $cb->(OK => 'Socket connected');
+
     return;
 }
     
@@ -56,7 +57,7 @@ sub send_pkt {
     while (1) {
         my $done = syswrite $self->fh, $pkt;
         unless (defined $done) {
-            $cb->(ER_SOCKET_WRITE => $!);
+            $cb->(ER_SOCKET => $!);
             return;
         }
         if ($done == length $pkt) {
@@ -69,14 +70,19 @@ sub send_pkt {
 
 sub _wait_something {
     my ($self) = @_;
-
     return unless $self->fh;
 
     do {
         my $blob = '';
         my $done = sysread $self->fh, $blob, 4096;
-        unless (defined $done) {
-            # TODO: errors
+
+        unless ($done) {
+            unless (defined $done) {
+                $self->socket_error($! // 'Connection lost');
+                return;
+            }
+            $self->socket_error('Remote host closed connection');
+            return;
         }
         $self->rbuf($self->rbuf . $blob);
 
