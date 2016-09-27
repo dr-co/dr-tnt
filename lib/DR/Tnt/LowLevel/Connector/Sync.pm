@@ -49,22 +49,8 @@ sub _handshake {
     });
 }
 
-sub _sread {
-    my ($self, $len, $cb) = @_;
 
-    my $blob = '';
-
-    my $done = sysread $self->fh, $blob, $len, length $blob;
-    unless (defined $done) {
-        $cb->(ER_SOCKET_READ => $!);
-        return;
-    }
-
-    $cb->(OK => 'sread done', $blob);
-    return;
-}
-
-sub _swrite {
+sub send_pkt {
     my ($self, $pkt, $cb) = @_;
 
     while (1) {
@@ -81,22 +67,32 @@ sub _swrite {
     }
 }
 
-around wait_response => sub {
-    my ($orig, $self, $sync, $cb) = @_;
-    my $cbtouch;
-    $self->$orig($sync, sub {
-        $cbtouch = 1;
-        goto \&$cb;
-    });
+sub _wait_something {
+    my ($self) = @_;
 
-    while (!$cbtouch) {
-        $self->sread(4096 => sub {
-            my ($state, $message, $blob) = @_;
-            goto \&$cb unless $state eq 'OK';
-            $self->rbuf($self->rbuf . $blob);
-            $self->check_rbuf;
-        });
-    }
+    return unless $self->fh;
+
+    do {
+        my $blob = '';
+        my $done = sysread $self->fh, $blob, 4096;
+        unless (defined $done) {
+            # TODO: errors
+        }
+        $self->rbuf($self->rbuf . $blob);
+
+    } until $self->check_rbuf;
+}
+
+
+after handshake => sub {
+    my ($self) = @_;
+    $self->_wait_something;
 };
+
+after wait_response => sub {
+    my ($self) = @_;
+    $self->_wait_something;
+};
+
 
 __PACKAGE__->meta->make_immutable;

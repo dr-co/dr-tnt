@@ -9,31 +9,91 @@ use List::MoreUtils 'any';
 use feature 'state';
 use Carp;
 use Data::Dumper;
+use feature 'switch';
+use Time::HiRes ();
 
-has fh  =>
-    is      => 'rw',
-    isa     => 'Maybe[Any]',
+use Mouse::Util::TypeConstraints;
+enum LLConnectorState => [
+    'init',
+    'connecting',
+    'connected',
+    'ready',
+    'error'
+];
+no Mouse::Util::TypeConstraints;
+
+has state =>
+    is => 'rw',
+    isa => 'LLConnectorState',
+    default => 'init',
     trigger => sub {
         my ($self) = @_;
-        $self->_active_sync({});
-        my $list = $self->_watcher;
-        $self->_watcher({});
-        for my $sync (keys %$list) {
-            for my $cb (@{ $list->{$sync} }) {
-                $cb->(ER_LOST_CONNECTION => 'Connection lost', $sync);
-                return;
-            }
+        goto $self->state;
+
+        init:
+            $self->last_error(undef);
+            die 1;
+
+        connecting: {
+            $self->last_error(undef);
+            my $fh = $self->fh;   
+            $self->fh(undef);
+            undef $fh if $fh;
+            $self->_active_sync({});
+            $self->_watcher({});
+            return;
+        }
+
+        connected:
+            $self->last_error(undef);
+            return;
+
+        ready:
+            $self->last_error(undef);
+            return;
+
+        error: {
+            $self->fh(undef);
+
+            confess "Can't set state 'error' without last_error"
+                unless $self->last_error;
+           
+            # on_handshake erorrs
+            my $list = $self->_on_handshake;
+            $self->_on_handshake([]);
+            $_->(@{ $self->last_error }) for @$list;
+           
+            # waiter errors
+            $list = $self->_watcher;
+            $self->_watcher({});
+            $_->(@{ $self->last_error }) for map { @$_ } values %$list;
+
+            # unsent errors
+            $list = $self->_unsent;
+            $self->_unsent([]);
+            $_->[-1](@{ $self->last_error }) for @$list;
+            return;
         }
     };
 
-has ll  => is => 'ro', isa => 'DR::Tnt::LowLevel', weak_ref => 1, required => 1;
+has fh              => is => 'rw', isa => 'Maybe[Any]';
+has ll              => is => 'ro', isa => 'DR::Tnt::LowLevel', weak_ref => 1, required => 1;
+
+has last_error_time => is => 'rw', isa => 'Num', default => 0;
+has last_error      =>
+    is      => 'rw',
+    isa     => 'Maybe[ArrayRef]',
+    trigger => sub { $_[0]->last_error_time(Time::HiRes::time) }
+;
 
 has greeting        => is => 'rw', isa => 'Maybe[HashRef]';
-has state           => is => 'rw', isa => 'Str', default => 'init';
 has rbuf            => is => 'rw', isa => 'Str', default => '';
+
+has _unsent         => is => 'rw', isa => 'ArrayRef', default => sub {[]};
 has _last_sync      => is => 'rw', isa => 'Int', default => 0;
 has _active_sync    => is => 'rw', isa => 'HashRef', default => sub {{}};
 has _watcher        => is => 'rw', isa => 'HashRef', default => sub {{}};
+has _on_handshake   => is => 'rw', isa => 'ArrayRef', default => sub {[]};
 
 sub next_sync {
     my ($self) = @_;
@@ -50,7 +110,7 @@ sub next_sync {
 sub connect {
     my ($self, $cb) = @_;
 
-    if (any { $_ eq $self->state } 'init', 'pause') {
+    if (any { $_ eq $self->state } 'init', 'error') {
         $self->fh(undef);
         $self->state('connecting');
         $self->_connect(sub {
@@ -58,7 +118,9 @@ sub connect {
             if ($state eq 'OK') {
                 $self->state('connected');
             } else {
-                $self->state('pause');
+                # TODO connection error
+                $self->last_error([ER_CONNECT => 'Can not connect to host']);
+                $self->state('error');
                 $self->fh(undef);
             }
             goto &$cb;
@@ -69,92 +131,101 @@ sub connect {
     return;
 }
 
+sub socket_error {
+
+    my ($self, $message) = @_;
+
+    $self->last_error([ER_SOCKET => $message]);
+    $self->state('error');
+}
+
 sub handshake {
     my ($self, $cb) = @_;
 
-    unless ($self->state eq 'connected') {
-        $self->state('fatal');
-        $self->fh(undef);
-        $cb->(fatal => 'can not read handshake in state: ' . $self->state);
+    goto $self->state;
+
+    ready:
+        $cb->(OK => 'Handshake was received', $self->greeting);
         return;
-    }
 
-    $self->state('handshake');
-    $self->greeting(undef);
+    init:
+    connecting:
+    connected:
+        push @{ $self->_on_handshake } => $cb;
+        return;
 
-    $self->_handshake(sub {
-        my ($state, $message, $hs) = @_;
-        unless ($state eq 'OK') {
-            $self->state('pause');
-            $cb->($state => $message);
-            return;
-        }
-
-        my $greeting = DR::Tnt::Proto::parse_greeting($hs);
-        if ($greeting and $greeting->{salt}) {
-            $self->greeting($greeting);
-            $self->state('ready');
-            $cb->(OK => 'handshake was read and parsed');
-            return;
-        }
-
-        $self->state('pause');
-        $cb->(ER_HANDSHAKE => 'wrong tarantool handshake');
-    });
-    return;
-
+    error:
+        $cb->(@{ $self->last_error });
+        return;
 }
+
 
 sub send_request {
     my $cb = pop;
     my ($self, $name, @args) = @_;
 
 
-    if ($self->state eq 'fatal') {
-        $cb->(ER_FATAL => 'Can not make new request after fatal error');
+    goto $self->state;
+
+
+    error: {
+        $cb->(@{ $self->last_error });
         return;
     }
 
- 
-    state $r = {
-        select      => \&DR::Tnt::Proto::select,
-        update      => \&DR::Tnt::Proto::update,
-        insert      => \&DR::Tnt::Proto::insert,
-        replace     => \&DR::Tnt::Proto::replace,
-        delele      => \&DR::Tnt::Proto::del,
-        call_lua    => \&DR::Tnt::Proto::call_lua,
-        ping        => \&DR::Tnt::Proto::ping,
-        auth        => \&DR::Tnt::Proto::auth,
-    };
 
-    croak "unknown method $name" unless exists $r->{$name};
+    ready: {
+        state $r = {
+            select      => \&DR::Tnt::Proto::select,
+            update      => \&DR::Tnt::Proto::update,
+            insert      => \&DR::Tnt::Proto::insert,
+            replace     => \&DR::Tnt::Proto::replace,
+            delele      => \&DR::Tnt::Proto::del,
+            call_lua    => \&DR::Tnt::Proto::call_lua,
+            ping        => \&DR::Tnt::Proto::ping,
+            auth        => \&DR::Tnt::Proto::auth,
+        };
 
-    state $ra = {
-        auth    => sub {
-            my $self = shift;
-            return (
-                @_,
-                $self->ll->user,
-                $self->ll->password,
-                $self->greeting->{salt},
-            );
-        }
-    };
-    
-    @args = $ra->{$name}->($self, @args) if exists $ra->{$name};
-    
-    my $sync = $self->next_sync;
-    my $pkt = $r->{$name}->($sync, @args);
+        croak "unknown method $name" unless exists $r->{$name};
 
-    $self->swrite($pkt, sub {
-        my ($state) = @_;
-        unless ($state eq 'OK') {
-            $self->state('pause');
-            $self->fh(undef);
-            goto \&cb;
-        }
-        $cb->(OK => 'OK', $sync);
-    });
+        state $ra = {
+            auth    => sub {
+                my $self = shift;
+                return (
+                    @_,
+                    $self->ll->user,
+                    $self->ll->password,
+                    $self->greeting->{salt},
+                );
+            }
+        };
+        
+        @args = $ra->{$name}->($self, @args) if exists $ra->{$name};
+        
+        my $sync = $self->next_sync;
+        my $pkt = $r->{$name}->($sync, @args);
+
+        $self->send_pkt($pkt, sub {
+            my ($state) = @_;
+            unless ($state eq 'OK') {
+                $self->last_error([ER_WRITE_SOCKET => 'Can not send data to socket']);
+                $self->state('error');
+                $self->fh(undef);
+                goto &$cb;
+            }
+            $cb->(OK => sprintf("packet '%s' sent", $name), $sync);
+        });
+
+        return;
+    }
+
+    init:
+    connected:
+    connecting:
+    {
+        push @{ $self->_unsent } => [ $name, @args, $cb ];
+        return;
+    }
 }
 
 sub wait_response {
@@ -172,57 +243,70 @@ sub wait_response {
     return;
 }
 
-sub swrite {
-    my ($self, $pkt, $cb) = @_;
-    unless ($self->state eq 'ready') {
-        $cb->(ER_NOT_READY => 'Connector is not ready to send requests');
-        return;
-    }
-    unless ($self->fh) {
-        $cb->(ER_CONNECTION_ESTABLISH => 'Connection is not established');
-        return;
-    }
-    $self->_swrite($pkt, $cb);
-    return;
-}
-sub sread {
-    my ($self, $len, $cb) = @_;
-    unless ($self->fh) {
-        $cb->(ER_CONNECTION_ESTABLISH => 'Connection is not established');
-        return;
-    }
-    $self->_sread($len, $cb);
-    return;
-}
-
 sub check_rbuf {
     my ($self) = @_;
+   
+    my $found = 0;
 
-    my $no = 0;
-    while (length $self->rbuf) {
-        my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf);
-        return unless defined $res;
+    # handshake
+    goto $self->state;
 
-        warn sprintf "%s pkt found, rbuf %s tail %s", ++$no, length $self->rbuf, length $tail;
-        $self->rbuf($tail);
+    ready: {
+        while (length $self->rbuf) {
+            my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf);
+            return $found unless defined $res;
+            
+            $found++;
 
-        my $sync = $res->{SYNC};
-        if (exists $self->_watcher->{$sync}) {
-            my $list = delete $self->_watcher->{$sync};
-            delete $self->_active_sync->{$sync};
-            for my $cb (@$list) {
-                $cb->(OK => 'Response received', $res);
+            $self->rbuf($tail);
+
+            my $sync = $res->{SYNC};
+            if (exists $self->_watcher->{$sync}) {
+                my $list = delete $self->_watcher->{$sync};
+                delete $self->_active_sync->{$sync};
+                for my $cb (@$list) {
+                    $cb->(OK => 'Response received', $res);
+                }
+                next;
             }
-            next;
-        }
 
-        unless (exists $self->_active_sync->{$sync}) {
-            warn "Unexpected tarantool reply $sync";
-            next;
-        }
+            unless (exists $self->_active_sync->{$sync}) {
+                warn "Unexpected tarantool reply $sync";
+                next;
+            }
 
-        $self->_active_sync->{$sync} = $res;
-    };
-    return;
+            $self->_active_sync->{$sync} = $res;
+        };
+        return $found;
+    }
+
+    connected: {
+        return $found if 128 > length $self->rbuf;
+        my $handshake = substr $self->rbuf, 0, 128;
+        $self->rbuf(substr $self->rbuf, 128);
+
+        my $greeting = DR::Tnt::Proto::parse_greeting($handshake);
+        unless ($greeting and $greeting->{salt}) {
+            $self->fh(undef);
+            $self->last_error([ER_HANDSHAKE => 'Broken handshake']);
+            $self->state('error');
+            return $found;
+        }
+        
+        $self->greeting($greeting);
+        $self->state('ready');
+        
+        for (my $list = $self->_on_handshake) {
+            $self->_on_handshake([]);
+            $_->(OK => 'Handshake received', $self->greeting) for @$list;
+            $found++;
+        }
+        
+        for (my $list = $self->_unsent) {
+            $self->_unsent([]);
+            $self->send_request(@$_) for @$list;
+        }
+        goto ready;
+    }
 }
 __PACKAGE__->meta->make_immutable;

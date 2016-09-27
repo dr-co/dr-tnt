@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 37;
+use Test::More tests    => 54;
 use Encode qw(decode encode);
 
 
@@ -35,8 +35,6 @@ my $c = new DR::Tnt::LowLevel
 ;
 isa_ok $c => DR::Tnt::LowLevel::, 'Low level connector';
 is $c->connector_class, 'DR::Tnt::LowLevel::Connector::AE', 'connector_class';
-is $c->reconnect_period, undef, 'reconnect_period is undefined';
-ok !$c->reconnect_always, 'do not reconnect_always';
 isa_ok $c->connector, DR::Tnt::LowLevel::Connector::AE::, 'connector';
 
 for my $cv (AE::cv) {
@@ -54,6 +52,7 @@ for my $cv (AE::cv) {
 }
 for my $cv (AE::cv) {
     $cv->begin;
+    is $c->connector->state, 'connected', 'connected';
     $c->handshake(
         sub {
             my ($code, $message, @args) = @_;
@@ -78,6 +77,7 @@ for my $cv (AE::cv) {
     });
     $cv->recv;
 }
+
 
 for my $cv (AE::cv) {
     $cv->begin;
@@ -122,26 +122,30 @@ for my $cv (AE::cv) {
     $cv->recv;
 }
 
+for my $cv (AE::cv) {
+    for ('first auth', 'second auth') {
+        $cv->begin;
+        note $_ . ' test';
+        $c->send_request(auth => undef, sub {
+            my ($code, $message, $sync) = @_;
+            is $code, 'OK', "$_ was send";
+            is $c->connector->state, 'ready', 'state';
+            isnt $sync, 1, 'next_sync';
+            ok exists $c->connector->_active_sync->{$sync}, 'active sync';
 
-__END__
+            $c->wait_response($sync, sub {
+                my ($code, $message, $resp) = @_;
+                is $code => 'OK', 'auth response';
 
-for ('first auth', 'second auth') {
-    note $_ . ' test';
-    $c->send_request(auth => undef, sub {
-        my ($code, $message, $sync) = @_;
-        is $code, 'OK', "$_ was send";
-        is $c->connector->state, 'ready', 'state';
-        isnt $sync, 1, 'next_sync';
-        ok exists $c->connector->_active_sync->{$sync}, 'active sync';
+                isa_ok $resp => 'HASH';
+                is $resp->{SYNC}, $sync, 'sync';
+                is $resp->{CODE}, 0, 'auth passed'; 
+                like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
 
-        $c->wait_response($sync, sub {
-            my ($code, $message, $resp) = @_;
-            is $code => 'OK', 'auth response';
-
-            isa_ok $resp => 'HASH';
-            is $resp->{SYNC}, $sync, 'sync';
-            is $resp->{CODE}, 0, 'auth passed'; 
-            like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
+                $cv->end;
+            });
         });
-    });
+    }
+    $cv->recv;
 }
+

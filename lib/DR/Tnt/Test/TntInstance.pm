@@ -33,6 +33,13 @@ sub new {
         close $fh;
     }
 
+
+    $self->start; 
+}
+
+
+sub start {
+    my ($self) = @_;
     if ($self->{pid} = fork) {
         for (1 .. 10) {
             Time::HiRes::sleep .1;
@@ -56,12 +63,17 @@ sub new {
     close $fh;
 
     chdir $self->{-dir};
-    if ($opts{-port}) {
-        $ENV{PRIMARY_PORT} = $opts{-port};
+    if ($self->port) {
+        $ENV{PRIMARY_PORT} = $self->port;
     }
-    $ENV{WORK_DIR} = $opts{-dir};
-    exec tarantool => $opts{-lua};
+    $ENV{WORK_DIR} = $self->{-dir};
+    exec tarantool => $self->{-lua};
     die "Can't start tarantool";
+}
+
+sub stop {
+    my ($self) = @_;
+    $self->kill('TERM');
 }
 
 sub port { $_[0]->{-port} }
@@ -93,7 +105,9 @@ sub kill {
     my ($self, $sig) = @_;
     return unless $self->pid;
     $sig ||= 'TERM';
-    unless (kill $sig, $self->pid) {
+    if (kill $sig, $self->pid) {
+        waitpid $self->pid, 0;
+    } else {
         warn sprintf "Can't kill -$sig %s\n", $self->pid;
     }
     delete $self->{pid};

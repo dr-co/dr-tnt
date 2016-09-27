@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 54;
+use Test::More tests    => 52;
 use Encode qw(decode encode);
 
 
@@ -34,8 +34,6 @@ my $c = new DR::Tnt::LowLevel
 ;
 isa_ok $c => DR::Tnt::LowLevel::, 'Low level connector';
 is $c->connector_class, 'DR::Tnt::LowLevel::Connector::Sync', 'connector_class';
-is $c->reconnect_period, undef, 'reconnect_period is undefined';
-ok !$c->reconnect_always, 'do not reconnect_always';
 isa_ok $c->connector, DR::Tnt::LowLevel::Connector::Sync::, 'connector';
 
 $c->connect(

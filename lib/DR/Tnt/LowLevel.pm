@@ -32,8 +32,5 @@ has port                => is => 'ro', isa => 'Str', required => 1;
 has user                => is => 'ro', isa => 'Str', required => 1;
 has password            => is => 'ro', isa => 'Str', required => 1;
 
-has reconnect_always    => is => 'ro', isa => 'Bool',       default => 0;
-has reconnect_period    => is => 'ro', isa => 'Maybe[Num]', default => undef;
-
 
 __PACKAGE__->meta->make_immutable;
