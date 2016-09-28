@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib t/lib);
 
-use Test::More tests    => 54;
+use Test::More tests    => 62;
 use Encode qw(decode encode);
 
 
@@ -121,6 +121,22 @@ for my $sync (int rand 1_000_000) {
     is $o->{SPACE_ID}, 123, 'space';
 
     is_deeply $o->{TUPLE}, [[qw(= 23 22)]], 'tuple';
+
+    test_substrings $up;
+}
+
+for my $sync (int rand 1_000_000) {
+    my $up = DR::Tnt::Proto::eval_lua $sync, undef, 'return "Hello"', 1 .. 15;
+    ok $up => 'EVAL body';
+    
+    my ($o, $tail) = DR::Tnt::Proto::response $up;
+    isa_ok $o => 'HASH';
+    is $tail, '', 'empty tail';
+
+    is $o->{CODE}, 'EVAL', 'code';
+    is $o->{SYNC}, $sync, 'sync';
+    is_deeply $o->{TUPLE}, [ 1  .. 15 ], 'tuple';
+    is $o->{EXPRESSION}, 'return "Hello"', 'EXPRESSION';
 
     test_substrings $up;
 }

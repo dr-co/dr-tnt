@@ -62,35 +62,35 @@ my %riter = reverse %iter;
 
 BEGIN {
     my %types = (
-        IPROTO_SELECT              => 1,
-        IPROTO_INSERT              => 2,
-        IPROTO_REPLACE             => 3,
-        IPROTO_UPDATE              => 4,
-        IPROTO_DELETE              => 5,
-        IPROTO_CALL                => 6,
-        IPROTO_AUTH                => 7,
-        IPROTO_DML_REQUEST_MAX     => 8,
-        IPROTO_PING                => 64,
-        IPROTO_SUBSCRIBE           => 66,
+        IPROTO_SELECT           => 1,
+        IPROTO_INSERT           => 2,
+        IPROTO_REPLACE          => 3,
+        IPROTO_UPDATE           => 4,
+        IPROTO_DELETE           => 5,
+        IPROTO_CALL             => 6,
+        IPROTO_AUTH             => 7,
+        IPROTO_EVAL             => 8,
+        IPROTO_PING             => 64,
     );
     my %attrs = (
-        IPROTO_CODE                => 0x00,
-        IPROTO_SYNC                => 0x01,
-        IPROTO_SERVER_ID           => 0x02,
-        IPROTO_LSN                 => 0x03,
-        IPROTO_TIMESTAMP           => 0x04,
-        IPROTO_SCHEMA_ID           => 0x05,
-        IPROTO_SPACE_ID            => 0x10,
-        IPROTO_INDEX_ID            => 0x11,
-        IPROTO_LIMIT               => 0x12,
-        IPROTO_OFFSET              => 0x13,
-        IPROTO_ITERATOR            => 0x14,
-        IPROTO_KEY                 => 0x20,
-        IPROTO_TUPLE               => 0x21,
-        IPROTO_FUNCTION_NAME       => 0x22,
-        IPROTO_USER_NAME           => 0x23,
-        IPROTO_DATA                => 0x30,
-        IPROTO_ERROR               => 0x31,
+        IPROTO_CODE             => 0x00,
+        IPROTO_SYNC             => 0x01,
+        IPROTO_SERVER_ID        => 0x02,
+        IPROTO_LSN              => 0x03,
+        IPROTO_TIMESTAMP        => 0x04,
+        IPROTO_SCHEMA_ID        => 0x05,
+        IPROTO_SPACE_ID         => 0x10,
+        IPROTO_INDEX_ID         => 0x11,
+        IPROTO_LIMIT            => 0x12,
+        IPROTO_OFFSET           => 0x13,
+        IPROTO_ITERATOR         => 0x14,
+        IPROTO_KEY              => 0x20,
+        IPROTO_TUPLE            => 0x21,
+        IPROTO_FUNCTION_NAME    => 0x22,
+        IPROTO_USER_NAME        => 0x23,
+        IPROTO_EXPRESSION       => 0x27,
+        IPROTO_DATA             => 0x30,
+        IPROTO_ERROR            => 0x31,
     );
 
     use constant;
@@ -105,7 +105,6 @@ BEGIN {
         $resolve{$v} = $n;
     }
 }
-
 
 
 sub raw_response($) {
@@ -184,7 +183,10 @@ sub response($) {
 sub request($$) {
     my ($header, $body) = @_;
     my $pkt = msgpack($header) . msgpack($body);
-    return msgpack(length $pkt) . $pkt;
+
+    return join '',
+        msgpack(length $pkt),
+        $pkt;
 }
 
 sub _mk_header($$$) {
@@ -217,6 +219,18 @@ sub _call_lua($$$$) {
 sub call_lua($$$@) {
     my ($sync, $schema_id, $proc, @args) = @_;
     return _call_lua($sync, $schema_id, $proc, \@args);
+}
+
+
+sub eval_lua($$$@) {
+    my ($sync, $schema_id, $lua, @args) = @_;
+    request
+        _mk_header(IPROTO_EVAL, $sync, $schema_id),
+        {
+            IPROTO_EXPRESSION,  $lua,
+            IPROTO_TUPLE,       \@args,
+        }
+    ;
 }
 
 sub insert($$$$) {

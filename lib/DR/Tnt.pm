@@ -3,9 +3,16 @@ use strict;
 use warnings;
 
 package DR::Tnt;
-use base qw(Exporter);
-our @EXPORT_OK = qw(
-    tarantool_connect
-);
+use Mouse;
 
-1;
+require DR::Tnt::LowLevel;
+
+use Mouse::Util::TypeConstraints;
+
+enum TntDrivers => [ 'sync', 'ae', 'coro' ];
+
+has driver      => is => 'ro', 
+
+
+
+__PACKAGE__->meta->make_immutable;

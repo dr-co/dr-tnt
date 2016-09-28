@@ -11,7 +11,7 @@ use Carp;
 use Data::Dumper;
 use feature 'switch';
 use Time::HiRes ();
-
+use DR::Tnt::Dumper;
 use Mouse::Util::TypeConstraints;
 enum LLConnectorState => [
     'init',
@@ -21,6 +21,12 @@ enum LLConnectorState => [
     'error'
 ];
 no Mouse::Util::TypeConstraints;
+
+has host        => is => 'ro', isa => 'Str', required => 1;
+has port        => is => 'ro', isa => 'Str', required => 1;
+has user        => is => 'ro', isa => 'Maybe[Str]';
+has password    => is => 'ro', isa => 'Maybe[Str]';
+
 
 has state =>
     is => 'rw',
@@ -36,9 +42,7 @@ has state =>
 
         connecting: {
             $self->last_error(undef);
-            my $fh = $self->fh;   
-            $self->fh(undef);
-            undef $fh if $fh;
+            $self->_clean_fh;
             $self->_active_sync({});
             $self->_watcher({});
             return;
@@ -53,7 +57,7 @@ has state =>
             return;
 
         error: {
-            $self->fh(undef);
+            $self->_clean_fh;
 
             confess "Can't set state 'error' without last_error"
                 unless $self->last_error;
@@ -76,8 +80,11 @@ has state =>
         }
     };
 
-has fh              => is => 'rw', isa => 'Maybe[Any]';
-has ll              => is => 'ro', isa => 'DR::Tnt::LowLevel', weak_ref => 1, required => 1;
+has fh =>
+    is      => 'ro',
+    isa     => 'Maybe[Any]',
+    clearer => '_clean_fh',
+    writer  => '_set_fh';
 
 has last_error_time => is => 'rw', isa => 'Num', default => 0;
 has last_error      =>
@@ -111,7 +118,7 @@ sub connect {
     my ($self, $cb) = @_;
 
     if (any { $_ eq $self->state } 'init', 'error') {
-        $self->fh(undef);
+        $self->_clean_fh;
         $self->state('connecting');
         $self->_connect(sub {
             my ($state, $message) = @_;
@@ -179,6 +186,7 @@ sub send_request {
             replace     => \&DR::Tnt::Proto::replace,
             delele      => \&DR::Tnt::Proto::del,
             call_lua    => \&DR::Tnt::Proto::call_lua,
+            eval_lua    => \&DR::Tnt::Proto::eval_lua,
             ping        => \&DR::Tnt::Proto::ping,
             auth        => \&DR::Tnt::Proto::auth,
         };
@@ -190,8 +198,8 @@ sub send_request {
                 my $self = shift;
                 return (
                     @_,
-                    $self->ll->user,
-                    $self->ll->password,
+                    $self->user,
+                    $self->password,
                     $self->greeting->{salt},
                 );
             }
@@ -201,6 +209,11 @@ sub send_request {
         
         my $sync = $self->next_sync;
         my $pkt = $r->{$name}->($sync, @args);
+
+        if ($ENV{DR_SEND_DUMP}) {
+            warn pkt_dump($name, $pkt);
+        }
+
 
         $self->send_pkt($pkt, sub {
             my ($state, $message) = @_;

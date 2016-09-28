@@ -14,15 +14,15 @@ sub _connect {
 
     my $fh;
     
-    if ($self->ll->host eq 'unix' or $self->ll->host eq 'unix/') {
+    if ($self->host eq 'unix' or $self->host eq 'unix/') {
         $fh = IO::Socket::UNIX->new(
             Type            => SOCK_STREAM,
-            Peer            => $self->ll->port,
+            Peer            => $self->port,
         );
     } else {
         $fh = IO::Socket::INET->new(
-            PeerHost        => $self->ll->host,
-            PeerPort        => $self->ll->port,
+            PeerHost        => $self->host,
+            PeerPort        => $self->port,
             Proto           => 'tcp',
         );
     }
@@ -32,7 +32,7 @@ sub _connect {
         return;
     }
 
-    $self->fh($fh);
+    $self->_set_fh($fh);
     $cb->(OK => 'Socket connected');
 
     return;
@@ -49,7 +49,6 @@ sub _handshake {
         $cb->(OK => 'handshake was read', $hs);
     });
 }
-
 
 sub send_pkt {
     my ($self, $pkt, $cb) = @_;
@@ -89,7 +88,6 @@ sub _wait_something {
     } until $self->check_rbuf;
 }
 
-
 after handshake => sub {
     my ($self) = @_;
     $self->_wait_something;
@@ -99,6 +97,5 @@ after wait_response => sub {
     my ($self) = @_;
     $self->_wait_something;
 };
-
 
 __PACKAGE__->meta->make_immutable;
