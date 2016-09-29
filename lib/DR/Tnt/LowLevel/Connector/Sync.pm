@@ -13,7 +13,6 @@ sub _connect {
     my ($self, $cb) = @_;
 
     my $fh;
-    
     if ($self->host eq 'unix' or $self->host eq 'unix/') {
         $fh = IO::Socket::UNIX->new(
             Type            => SOCK_STREAM,

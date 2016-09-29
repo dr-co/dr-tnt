@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 1;
+use Test::More tests    => 18;
 use Encode qw(decode encode);
 
 
@@ -92,14 +92,41 @@ for (+note 'lua_dir is present') {
 
     for my $cv (AE::cv) {
         $cv->begin;
-        $c->call_lua('box.session.storage.rettest', 1, sub {
-            note explain \@_;
+        $c->request(call_lua => 'box.session.storage.rettest', 1, sub {
+            is $_[0], 'OK', 'status';
+            is_deeply $_[2], [[ test => 2 ] ], 'response';
+            $cv->end;
+        });
+        $cv->recv;
+    }
+    
+    for my $cv (AE::cv) {
+        $cv->begin;
+        $c->request(select => '_space', 'primary', 280, sub {
+            is $_[0], 'OK', 'status';
+            is_deeply [ @{ $_[2][0] }[0,2] ], [ 280, '_space'], 'response';
 
             $cv->end;
         });
         $cv->recv;
     }
+    
+    for my $cv (AE::cv) {
+        $cv->begin;
+        $c->request(select => '_space', 'primary1', 280, sub {
+            is $_[0], 'ER_NOINDEX', 'status';
+            $cv->end;
+        });
+        $cv->recv;
+    }
 
-#     note $ti->log;
+    for my $cv (AE::cv) {
+        $cv->begin;
+        $c->request(select => '_spacei1', 'primary', 280, sub {
+            is $_[0], 'ER_NOSPACE', 'status';
+            $cv->end;
+        });
+        $cv->recv;
+    }
 }
 

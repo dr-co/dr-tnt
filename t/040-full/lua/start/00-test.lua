@@ -1,3 +1,3 @@
 box.session.storage.rettest = function(a)
-    return { 'test', a }
+    return { box.tuple.new({ 'test', a + 1  }) }
 end

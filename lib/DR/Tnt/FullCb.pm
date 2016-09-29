@@ -10,9 +10,16 @@ use File::Spec::Functions 'catfile', 'rel2abs';
 use Carp;
 use DR::Tnt::Dumper;
 use Mouse::Util::TypeConstraints;
+use Scalar::Util;
+use feature 'state';
 
 enum DriverType     => [ 'sync', 'async' ];
 enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
+
+subtype FilePath    =>
+    as 'Str',
+    where { -d $_ },
+    message { "$_ is not a directory" };
 
 no Mouse::Util::TypeConstraints;
 
@@ -41,7 +48,7 @@ has user        => is => 'ro', isa => 'Maybe[Str]';
 has password    => is => 'ro', isa => 'Maybe[Str]';
 has driver      => is => 'ro', isa => 'DriverType', required => 1;
 
-has lua_dir     => is => 'ro', isa => 'Maybe[Str]', writer => '_set_lua_dir';
+has lua_dir     => is => 'ro', isa => 'Maybe[FilePath]', writer => '_set_lua_dir';
 
 has last_error  => is => 'ro', isa => 'Maybe[ArrayRef]', writer => '_set_last_error';
 
@@ -225,12 +232,15 @@ sub _preeval_unsent_lua {
 }
 
 
-has _sch        => is => 'rw', isa => 'HashRef';
-has _spaces     => is => 'rw', isa => 'ArrayRef', default => sub {[]};
-has _indexes    => is => 'rw', isa => 'ArrayRef', default => sub {[]};
+has _sch            => is => 'rw', isa => 'HashRef';
+has _spaces         => is => 'rw', isa => 'ArrayRef', default => sub {[]};
+has _indexes        => is => 'rw', isa => 'ArrayRef', default => sub {[]};
+
+has _wait_schema    => is => 'rw', isa => 'ArrayRef', default => sub { [] };
 
 sub _invalid_schema {
     my ($self, $cb) = @_;
+
     goto $self->state;
 
 
@@ -280,7 +290,6 @@ sub _invalid_schema {
                     # TODO: $resp->{CODE}
                     $self->_ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
-                        warn $message;
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
                             $self->_set_state('pause');
@@ -291,7 +300,7 @@ sub _invalid_schema {
 
                         $self->_set_schema($resp->{SCHEMA_ID});
                         $self->_set_state('ready');
-                        $cb->('OK');
+                        $cb->('OK', 'Connected, schema loaded');
                     });
                 });
 
@@ -307,8 +316,9 @@ sub _set_schema {
     my %sch;
 
     for (@{ $self->_spaces }) {
-        my $space = $sch{ $_->[2] } = {
+        my $space = $sch{ $_->[0] } = $sch{ $_->[2] } = {
             id      => $_->[0],
+            name    => $_->[2],
             engine  => $_->[3],
             flags   => $_->[5],
             fields  => $_->[6],
@@ -318,8 +328,10 @@ sub _set_schema {
         for (@{ $self->_indexes }) {
             next unless $_->[0] == $space->{id};
 
-            $space->{indexes}{ $_->[2] } = {
+            $space->{indexes}{ $_->[2] } = 
+            $space->{indexes}{ $_->[1] } = {
                 id      => $_->[1],
+                name    => $_->[2],
                 type    => $_->[3],
                 flags   => $_->[4],
                 fields  => [
@@ -335,48 +347,161 @@ sub _set_schema {
     $self->_spaces([]);
 }
 
-sub tuples {
-    my ($self, $resp, $space) = @_;
-    $resp;
+sub _tuples {
+    my ($self, $resp, $space, $cb) = @_;
+
+
+    unless (defined $space) {
+        $cb->(OK => 'Response received', $resp->{DATA} // []);
+        return;
+    }
+
+    unless (exists $self->_sch->{ $space }) {
+        $cb->(OK => "Space $space not exists in schema", $resp->{DATA} // []);
+        return;
+    }
+
+    my $res = $resp->{DATA} // [];
+    $space = $self->_sch->{ $space };
+
+    goto skip;
+
+    for my $tuple (@$res) {
+        next unless 'ARRAY' eq ref $tuple;
+        my %t;
+
+        for (0 .. $#{ $space->{fields} }) {
+            my $fname = $space->{fields}[$_]{name} // sprintf "field:%02X", $_;
+            $t{$fname} = $tuple->[$_];
+        }
+
+        $t{tail} = [ splice @$tuple, scalar @{ $space->{fields} } ];
+
+        $tuple = \%t;
+    }
+
+    skip:
+
+    $cb->(OK => 'Response received', $res);
 }
 
-sub call_lua {
+
+
+sub request {
     my $cb = pop;
-    my ($self, $proc, @args) = @_;
+    my ($self, $name, @args) = @_;
 
-    my $space;
-    ($proc, $space) = @$proc if ref $proc;
+    my $request = [ $name, @args, $cb ];
+    
+   
+    # all states waits ready
+    goto $self->state;
+    init:
+    pause:
+    schema:
+    connecting:
+        push @{ $self->_wait_schema } => $request;
+        return;
 
-    $self->_ll->send_request(call_lua => undef, $proc, @args,  sub {
+
+    ready:
+
+    croak 'Usage $tnt->request(method => args ... sub { .. })'
+        unless 'CODE' eq ref $cb;
+
+
+    my ($space, $index);
+    state $space_pos = {
+        select      => 'index',
+        update      => 'normal',
+        insert      => 'normal',
+        replace     => 'normal',
+        delele      => 'normal',
+        call_lua    => 'mayberef',
+        eval_lua    => 'mayberef',
+        ping        => 'none',
+        auth        => 'none',
+    };
+
+    croak "unknown method $name" unless exists $space_pos->{$name};
+
+    goto $space_pos->{$name};
+
+    index:
+        $space = $args[0];
+        unless (exists $self->_sch->{ $space }) {
+            $cb->(ER_NOSPACE => "Space $space not found");
+            return;
+        }
+        $args[0] = $self->_sch->{ $space }{id};
+        
+        $index = $args[1];
+        unless (exists $self->_sch->{ $space }{indexes}{ $index }) {
+            $cb->(ER_NOINDEX => "Index space[$space].$index not found");
+            return;
+        }
+
+        $index = $args[1] = $self->_sch->{$space}{indexes}{ $index }{id};
+        goto do_request;
+
+    normal:
+        $space = $args[0];
+        unless (exists $self->_sch->{ $space }) {
+            $cb->(ER_NOSPACE => "Space $space not found");
+            return;
+        }
+        $space = $args[0] = $self->_sch->{ $space }{id};
+        goto do_request;
+
+    mayberef:
+        if ('ARRAY' eq ref $args[0]) {
+            ($args[0], $space) = @{ $args[0] };
+        }
+        goto do_request unless defined $space;
+        unless (exists $self->_sch->{ $space }) {
+            $cb->(ER_NOSPACE => "Space $space not found");
+            return;
+        }
+        $space = $self->_sch->{ $space }{id};
+
+
+    none:
+
+    do_request:
+
+    $self->_ll->send_request($name, $self->last_schema, @args, sub {
         my ($state, $message, $sync) = @_;
-
         unless ($state eq 'OK') {
-            $self->_set_last_error([ $state, $message ]);
+            $self->_set_last_error([ $state => $message ]);
             $self->_set_state('pause');
-            $cb->($state => $message);
+            $cb->(@{ $self->last_error });
             return;
         }
 
         $self->_ll->wait_response($sync, sub {
             my ($state, $message, $resp) = @_;
             unless ($state eq 'OK') {
-                $self->_set_last_error([ $state, $message ]);
+                $self->_set_last_error([ $state => $message ]);
                 $self->_set_state('pause');
-                $cb->($state => $message);
+                $cb->(@{ $self->last_error });
                 return;
             }
-            $cb->(OK => $self->tuples($resp, $space));
+
+            # schema collision
+            if ($resp->{CODE} == 0x806D) {
+                push @{ $self->_wait_schema } => $request;
+                $self->_invalid_schema(sub {}) if $self->state eq 'ready';
+                return;
+            }
+
+            unless ($resp->{CODE} == 0) {
+                $cb->(ER_REQUEST => $resp->{ERROR}, $resp->{CODE});
+                return;
+            }
+            $self->_tuples($resp, $space, $cb);
         });
     });
-}
 
-sub BUILD {
-    my ($self) = @_;
-    if ($self->lua_dir) {
-        croak(sprintf '%s is not a directory', $self->lua_dir)
-            unless -d $self->lua_dir;
-        $self->_set_lua_dir(rel2abs $self->lua_dir);
-    }
 }
 
 
