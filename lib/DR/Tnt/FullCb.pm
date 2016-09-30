@@ -14,16 +14,15 @@ use Scalar::Util;
 use feature 'state';
 
 
-
 use Mouse::Util::TypeConstraints;
 
-enum DriverType     => [ 'sync', 'async' ];
-enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
+    enum DriverType     => [ 'sync', 'async' ];
+    enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
 
-subtype FilePath    =>
-    as 'Str',
-    where { -d $_ },
-    message { "$_ is not a directory" };
+    subtype FilePath    =>
+        as 'Str',
+        where { -d $_ },
+        message { "$_ is not a directory" };
 
 no Mouse::Util::TypeConstraints;
 
@@ -45,66 +44,69 @@ our %INT_LUA;
     }
 }
 
-has logger      => is => 'ro', isa => 'Maybe[CodeRef]';
-has host        => is => 'ro', isa => 'Str', required => 1;
-has port        => is => 'ro', isa => 'Str', required => 1;
-has user        => is => 'ro', isa => 'Maybe[Str]';
-has password    => is => 'ro', isa => 'Maybe[Str]';
-has driver      => is => 'ro', isa => 'DriverType', required => 1;
-
-has lua_dir     => is => 'ro', isa => 'Maybe[FilePath]', writer => '_set_lua_dir';
-
-has last_error  => is => 'ro', isa => 'Maybe[ArrayRef]', writer => '_set_last_error';
-
+has logger              => is => 'ro', isa => 'Maybe[CodeRef]';
+has host                => is => 'ro', isa => 'Str', required => 1;
+has port                => is => 'ro', isa => 'Str', required => 1;
+has user                => is => 'ro', isa => 'Maybe[Str]';
+has password            => is => 'ro', isa => 'Maybe[Str]';
+has driver              => is => 'ro', isa => 'DriverType', required => 1;
+has reconnect_interval  => is => 'ro', isa => 'Maybe[Num]';
+has lua_dir =>
+    is          => 'ro',
+    isa         => 'Maybe[FilePath]',
+    writer      => '_set_lua_dir'
+;
+has last_error =>
+    is          => 'ro',
+    isa         => 'Maybe[ArrayRef]',
+    writer      => '_set_last_error'
+;
 has state =>
     is          => 'ro',
     isa         => 'FullCbState',
     default     => 'init',
     writer      => '_set_state',
     trigger     => sub {
-        $_[0]->_log(info => 'Connector is in state: %s',  $_[0]->state)
+        my ($self, undef, $old_state) = @_;
+
+        $self->_reconnector->event($self->state, $old_state);
+        $self->_log(info => 'Connector is in state: %s',  $self->state);
     };
 ;
+has last_schema =>
+    is      => 'ro',
+    isa     => 'Int',
+    default => 0,
+    writer  => '_set_last_schema'
+;
 
-has last_schema => is => 'rw', isa => 'Int', default => 0;
 
-
-
-
-has _ll  =>
-    is          => 'ro',
-    isa         => 'DR::Tnt::LowLevel',
-    lazy        => 1,
-    builder     => sub {
+has _reconnector    =>
+    is      => 'ro',
+    isa     => 'Object',
+    lazy    => 1,
+    builder => sub {
         my ($self) = @_;
+
         goto $self->driver;
 
-
-        my $connector_class;
+        sync:
+            require DR::Tnt::FullCb::Reconnector::Sync;
+            return DR::Tnt::FullCb::Reconnector::Sync->new(fcb => $self);
 
         async:
-            require DR::Tnt::LowLevel::Connector::AE;
-            $connector_class = 'DR::Tnt::LowLevel::Connector::AE';
-            goto build;
+            require DR::Tnt::FullCb::Reconnector::AE;
+            return DR::Tnt::FullCb::Reconnector::AE->new(fcb => $self);
 
-        sync:
-            require DR::Tnt::LowLevel::Connector::Sync;
-            $connector_class = 'DR::Tnt::LowLevel::Connector::Sync';
-            goto build;
+    }
+;
 
-        build:
-            DR::Tnt::LowLevel->new(
-                host            => $self->host,
-                port            => $self->port,
-                user            => $self->user,
-                password        => $self->password,
-                connector_class => $connector_class,
-            );
-    };
 
 sub restart {
     my ($self, $cb) = @_;
 
+
+    $cb ||= sub {  };
     $self->_log(info => 'Starting connection to %s:%s (driver: %s)',
         $self->host, $self->port, $self->driver);
 
@@ -116,7 +118,7 @@ sub restart {
     pause:
     ready:
         $self->_set_state('connecting');
-        $self->_ll->connect(sub {
+        $self->_reconnector->_ll->connect(sub {
             my ($state, $message) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
@@ -125,7 +127,7 @@ sub restart {
                 return;
             }
 
-            $self->_ll->handshake(sub {
+            $self->_reconnector->_ll->handshake(sub {
                 my ($state, $message) = @_;
                 unless ($state eq 'OK') {
                     $self->_set_last_error([ $state, $message ]);
@@ -134,13 +136,11 @@ sub restart {
                     return;
                 }
 
-
-
                 unless ($self->user and $self->password) {
                     return $self->_preeval_lua($cb);
                 }
 
-                $self->_ll->send_request(auth => undef, sub {
+                $self->_reconnector->_ll->send_request(auth => undef, sub {
                     my ($state, $message, $sync) = @_;
                     unless ($state eq 'OK') {
                         $self->_set_last_error([ $state, $message ]);
@@ -149,7 +149,7 @@ sub restart {
                         return;
                     }
 
-                    $self->_ll->wait_response($sync, sub {
+                    $self->_reconnector->_ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
@@ -204,7 +204,7 @@ sub _preeval_unsent_lua {
     if (open my $fh, '<:raw', $lua) {
         local $/;
         my $body = <$fh>;
-        $self->_ll->send_request(eval_lua => undef, $body, sub {
+        $self->_reconnector->_ll->send_request(eval_lua => undef, $body, sub {
             my ($state, $message, $sync) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
@@ -213,7 +213,7 @@ sub _preeval_unsent_lua {
                 return;
             }
 
-            $self->_ll->wait_response($sync, sub {
+            $self->_reconnector->_ll->wait_response($sync, sub {
                 my ($state, $message, $resp) = @_;
                 unless ($state eq 'OK') {
                     $self->_set_last_error([ $state, $message ]);
@@ -245,7 +245,7 @@ has _sch            => is => 'rw', isa => 'HashRef';
 has _spaces         => is => 'rw', isa => 'ArrayRef', default => sub {[]};
 has _indexes        => is => 'rw', isa => 'ArrayRef', default => sub {[]};
 
-has _wait_schema    => is => 'rw', isa => 'ArrayRef', default => sub { [] };
+has _wait_ready    => is => 'rw', isa => 'ArrayRef', default => sub { [] };
 
 sub _invalid_schema {
     my ($self, $cb) = @_;
@@ -261,7 +261,7 @@ sub _invalid_schema {
     connecting:
     ready:
         $self->_set_state('schema');
-        $self->_ll->send_request(select => undef, 280, 0, [], undef, undef, 'ALL', sub {
+        $self->_reconnector->_ll->send_request(select => undef, 280, 0, [], undef, undef, 'ALL', sub {
             my ($state, $message, $sync) = @_;
             $self->_log(debug => 'Loading spaces');
             unless ($state eq 'OK') {
@@ -271,7 +271,7 @@ sub _invalid_schema {
                 return;
             }
 
-            $self->_ll->wait_response($sync, sub {
+            $self->_reconnector->_ll->wait_response($sync, sub {
                 my ($state, $message, $resp) = @_;
                 unless ($state eq 'OK') {
                         warn $message;
@@ -287,7 +287,7 @@ sub _invalid_schema {
                 # TODO: $resp->{CODE}
 
                 $self->_log(debug => 'Loading indexes');
-                $self->_ll->send_request(select => $resp->{SCHEMA_ID},
+                $self->_reconnector->_ll->send_request(select => $resp->{SCHEMA_ID},
                                     288, 0, [], undef, undef, 'ALL', sub { 
 
                     my ($state, $message, $sync) = @_;
@@ -299,7 +299,7 @@ sub _invalid_schema {
                     }
 
                     # TODO: $resp->{CODE}
-                    $self->_ll->wait_response($sync, sub {
+                    $self->_reconnector->_ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
@@ -312,8 +312,8 @@ sub _invalid_schema {
                         $self->_set_schema($resp->{SCHEMA_ID});
                         $self->_set_state('ready');
 
-                        my $list = $self->_wait_schema;
-                        $self->_wait_schema([]);
+                        my $list = $self->_wait_ready;
+                        $self->_wait_ready([]);
                         $cb->('OK', 'Connected, schema loaded');
                         $self->request(@$_) for @$list;
                     });
@@ -354,7 +354,7 @@ sub _set_schema {
         }
     }
      
-    $self->last_schema($schema_id);
+    $self->_set_last_schema($schema_id);
     $self->_sch(\%sch);
     $self->_indexes([]);
     $self->_spaces([]);
@@ -409,13 +409,22 @@ sub request {
    
     # all states waits ready
     goto $self->state;
+
+
     init:
-    pause:
     schema:
     connecting:
-        push @{ $self->_wait_schema } => $request;
+        push @{ $self->_wait_ready } => $request;
         return;
 
+    pause:
+        unless (defined $self->reconnect_interval) {
+            $cb->(@{ $self->last_error });
+            return;
+        }
+        push @{ $self->_wait_ready } => $request;
+        $self->_reconnector->check_pause;
+        return;
 
     ready:
 
@@ -482,7 +491,7 @@ sub request {
 
     do_request:
 
-    $self->_ll->send_request($name, $self->last_schema, @args, sub {
+    $self->_reconnector->_ll->send_request($name, $self->last_schema, @args, sub {
         my ($state, $message, $sync) = @_;
         unless ($state eq 'OK') {
             $self->_set_last_error([ $state => $message ]);
@@ -491,7 +500,7 @@ sub request {
             return;
         }
 
-        $self->_ll->wait_response($sync, sub {
+        $self->_reconnector->_ll->wait_response($sync, sub {
             my ($state, $message, $resp) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state => $message ]);
@@ -502,7 +511,8 @@ sub request {
 
             # schema collision
             if ($resp->{CODE} == 0x806D) {
-                push @{ $self->_wait_schema } => $request;
+                $self->_log(error => 'Detected schema collision');
+                push @{ $self->_wait_ready } => $request;
                 $self->_invalid_schema(sub {}) if $self->state eq 'ready';
                 return;
             }
