@@ -18,6 +18,7 @@ our @EXPORT = qw(
 
 sub tarantool_version() {
 
+    local $SIG{__WARN__} = sub {  };
     if (open my $fh, '-|', 'tarantool', '-V') {
         my $v = <$fh>;
         return undef unless $v =~ /^Tarantool\s+(\S+)/;
