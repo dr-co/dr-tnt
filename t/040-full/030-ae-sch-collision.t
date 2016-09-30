@@ -18,20 +18,19 @@ BEGIN {
     tarantool_version_check(1.6);
 }
 
-my $ti = start_tarantool
-    -lua    => 't/040-full/lua/easy.lua';
-isa_ok $ti => DR::Tnt::Test::TntInstance::, 'tarantool';
-
-diag $ti->log unless
-    ok $ti->is_started, 'test tarantool started';
-
-
 sub LOGGER {
     my ($level, $message) = @_;
     return unless $ENV{DEBUG};
     my $now = POSIX::strftime '%F %T', localtime;
     note "$now [$level] $message";
 }
+
+my $ti = start_tarantool
+    -lua    => 't/040-full/lua/easy.lua';
+isa_ok $ti => DR::Tnt::Test::TntInstance::, 'tarantool';
+
+diag $ti->log unless
+    ok $ti->is_started, 'test tarantool started';
 
 for (+note 'easy connect') {
     my $c = new DR::Tnt::FullCb
@@ -110,6 +109,8 @@ for (+note 'lua_dir is present') {
         });
         $cv->recv;
     }
+    
+    $c->last_schema($c->last_schema - 1);
     
     for my $cv (AE::cv) {
         $cv->begin;

@@ -9,9 +9,13 @@ require DR::Tnt::LowLevel;
 use File::Spec::Functions 'catfile', 'rel2abs';
 use Carp;
 use DR::Tnt::Dumper;
-use Mouse::Util::TypeConstraints;
+with 'DR::Tnt::Role::Logging';
 use Scalar::Util;
 use feature 'state';
+
+
+
+use Mouse::Util::TypeConstraints;
 
 enum DriverType     => [ 'sync', 'async' ];
 enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
@@ -41,7 +45,7 @@ our %INT_LUA;
     }
 }
 
-
+has logger      => is => 'ro', isa => 'Maybe[CodeRef]';
 has host        => is => 'ro', isa => 'Str', required => 1;
 has port        => is => 'ro', isa => 'Str', required => 1;
 has user        => is => 'ro', isa => 'Maybe[Str]';
@@ -57,6 +61,9 @@ has state =>
     isa         => 'FullCbState',
     default     => 'init',
     writer      => '_set_state',
+    trigger     => sub {
+        $_[0]->_log(info => 'Connector is in state: %s',  $_[0]->state)
+    };
 ;
 
 has last_schema => is => 'rw', isa => 'Int', default => 0;
@@ -98,9 +105,11 @@ has _ll  =>
 sub restart {
     my ($self, $cb) = @_;
 
+    $self->_log(info => 'Starting connection to %s:%s (driver: %s)',
+        $self->host, $self->port, $self->driver);
+
     goto $self->state;
-
-
+    
     init:
     connecting:
     schema:
@@ -176,7 +185,6 @@ sub _preeval_lua {
         $self->_unsent_lua(\@lua);
     }
 
-
     $self->_preeval_unsent_lua($cb);
     return;
 }
@@ -188,9 +196,10 @@ sub _preeval_unsent_lua {
         $self->_invalid_schema($cb);
         return;
     }
-    
 
     my $lua = shift @{ $self->_unsent_lua };
+
+    $self->_log(debug => 'Eval "%s" after connection', $lua); 
 
     if (open my $fh, '<:raw', $lua) {
         local $/;
@@ -254,6 +263,7 @@ sub _invalid_schema {
         $self->_set_state('schema');
         $self->_ll->send_request(select => undef, 280, 0, [], undef, undef, 'ALL', sub {
             my ($state, $message, $sync) = @_;
+            $self->_log(debug => 'Loading spaces');
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
                 $self->_set_state('pause');
@@ -276,6 +286,7 @@ sub _invalid_schema {
                 $self->_spaces($resp->{DATA});
                 # TODO: $resp->{CODE}
 
+                $self->_log(debug => 'Loading indexes');
                 $self->_ll->send_request(select => $resp->{SCHEMA_ID},
                                     288, 0, [], undef, undef, 'ALL', sub { 
 
@@ -300,11 +311,13 @@ sub _invalid_schema {
 
                         $self->_set_schema($resp->{SCHEMA_ID});
                         $self->_set_state('ready');
+
+                        my $list = $self->_wait_schema;
+                        $self->_wait_schema([]);
                         $cb->('OK', 'Connected, schema loaded');
+                        $self->request(@$_) for @$list;
                     });
                 });
-
-
             });
         });
 
@@ -382,7 +395,7 @@ sub _tuples {
 
     skip:
 
-    $cb->(OK => 'Response received', $res);
+        $cb->(OK => 'Response received', $res);
 }
 
 

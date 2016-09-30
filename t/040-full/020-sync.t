@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 17;
+use Test::More tests    => 18;
 use Encode qw(decode encode);
 
 
@@ -14,7 +14,15 @@ BEGIN {
     use_ok 'DR::Tnt::FullCb';
     use_ok 'DR::Tnt::Test';
     use_ok 'AE';
+    use_ok 'POSIX';
     tarantool_version_check(1.6);
+}
+
+sub LOGGER {
+    my ($level, $message) = @_;
+    return unless $ENV{DEBUG};
+    my $now = POSIX::strftime '%F %T', localtime;
+    note "$now [$level] $message";
 }
 
 my $ti = start_tarantool
@@ -32,6 +40,7 @@ for (+note 'easy connect') {
         user            => 'testrwe',
         password        => 'test',
         connector_class => 'DR::Tnt::LowLevel::Connector::AE',
+        logger          => \&LOGGER,
     ;
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';
 
@@ -52,7 +61,8 @@ for (+note 'lua_dir is present') {
         user            => 'testrwe',
         password        => 'test',
         connector_class => 'DR::Tnt::LowLevel::Connector::AE',
-        lua_dir         => 't/040-full/lua/start'
+        lua_dir         => 't/040-full/lua/start',
+        logger          => \&LOGGER,
     ;
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';
 
@@ -67,7 +77,8 @@ for (+note 'lua_dir is present') {
         is $_[0], 'OK', 'status';
         is_deeply $_[2], [[ test => 2 ] ], 'response';
     });
-    
+   
+
     $c->request(select => '_space', 'primary', 280, sub {
         is $_[0], 'OK', 'status';
         is_deeply [ @{ $_[2][0] }[0,2] ], [ 280, '_space'], 'response';
