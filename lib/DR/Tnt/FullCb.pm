@@ -252,7 +252,6 @@ sub _invalid_schema {
 
     goto $self->state;
 
-
     init:
     pause:
     schema:
@@ -261,7 +260,8 @@ sub _invalid_schema {
     connecting:
     ready:
         $self->_set_state('schema');
-        $self->_reconnector->_ll->send_request(select => undef, 280, 0, [], undef, undef, 'ALL', sub {
+        $self->_reconnector->_ll->send_request(select =>
+                                undef, 280, 0, [], undef, undef, 'ALL', sub {
             my ($state, $message, $sync) = @_;
             $self->_log(debug => 'Loading spaces');
             unless ($state eq 'OK') {
@@ -281,14 +281,12 @@ sub _invalid_schema {
                     return;
                 }
 
-
-
                 $self->_spaces($resp->{DATA});
                 # TODO: $resp->{CODE}
 
                 $self->_log(debug => 'Loading indexes');
-                $self->_reconnector->_ll->send_request(select => $resp->{SCHEMA_ID},
-                                    288, 0, [], undef, undef, 'ALL', sub { 
+                $self->_reconnector->_ll->send_request(select =>
+                    $resp->{SCHEMA_ID}, 288, 0, [], undef, undef, 'ALL', sub { 
 
                     my ($state, $message, $sync) = @_;
                     unless ($state eq 'OK') {

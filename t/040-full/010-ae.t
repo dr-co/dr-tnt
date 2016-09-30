@@ -40,7 +40,6 @@ for (+note 'easy connect') {
         port            => $ti->port,
         user            => 'testrwe',
         password        => 'test',
-        connector_class => 'DR::Tnt::LowLevel::Connector::AE',
         logger          => \&LOGGER,
     ;
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';

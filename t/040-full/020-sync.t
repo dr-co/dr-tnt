@@ -60,7 +60,6 @@ for (+note 'lua_dir is present') {
         port            => $ti->port,
         user            => 'testrwe',
         password        => 'test',
-        connector_class => 'DR::Tnt::LowLevel::Connector::AE',
         lua_dir         => 't/040-full/lua/start',
         logger          => \&LOGGER,
     ;

@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 27;
+use Test::More tests    => 25;
 use Encode qw(decode encode);
 
 
@@ -40,19 +40,12 @@ for (+note 'reconnect_interval is undefined') {
         port            => $ti->port,
         user            => 'testrwe',
         password        => 'test',
-        connector_class => 'DR::Tnt::LowLevel::Connector::AE',
         lua_dir         => 't/040-full/lua/start',
         logger          => \&LOGGER,
     ;
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';
 
     for my $cv (AE::cv) {
-        $cv->begin;
-        my $timer = AE::timer 0.5, 0, sub {
-            pass 'pause done';
-            $cv->end;
-        };
-        
         
         $cv->begin;
         $c->restart(
@@ -116,12 +109,6 @@ for (+note 'reconnect_interval is defined') {
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';
 
     for my $cv (AE::cv) {
-        $cv->begin;
-        my $timer = AE::timer 0.5, 0, sub {
-            pass 'pause done';
-            $cv->end;
-        };
-        
         
         $cv->begin;
         $c->restart(

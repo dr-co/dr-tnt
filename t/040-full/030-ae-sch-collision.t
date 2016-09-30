@@ -42,7 +42,6 @@ for (+note 'easy connect') {
         port            => $ti->port,
         user            => 'testrwe',
         password        => 'test',
-        connector_class => 'DR::Tnt::LowLevel::Connector::AE',
         logger          => \&LOGGER,
     ;
     isa_ok $c => DR::Tnt::FullCb::, 'connector created';
@@ -77,7 +76,6 @@ for (+note 'lua_dir is present') {
         port            => $ti->port,
         user            => 'testrwe',
         password        => 'test',
-        connector_class => 'DR::Tnt::LowLevel::Connector::AE',
         lua_dir         => 't/040-full/lua/start',
         logger          => \&LOGGER,
     ;
