@@ -19,11 +19,6 @@ use Mouse::Util::TypeConstraints;
     enum DriverType     => [ 'sync', 'async' ];
     enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
 
-    subtype FilePath    =>
-        as 'Str',
-        where { -d $_ },
-        message { "$_ is not a directory" };
-
 no Mouse::Util::TypeConstraints;
 
 has logger              => is => 'ro', isa => 'Maybe[CodeRef]';
@@ -36,7 +31,7 @@ has reconnect_interval  => is => 'ro', isa => 'Maybe[Num]';
 has hashify_tuples      => is => 'ro', isa => 'Bool', default => 0;
 has lua_dir =>
     is          => 'ro',
-    isa         => 'Maybe[FilePath]',
+    isa         => 'Maybe[Str]',
     writer      => '_set_lua_dir'
 ;
 has last_error =>
@@ -387,6 +382,13 @@ sub request {
     goto $self->state;
 
     init:
+        $self->_log(info => 'Defer request "%s" until first connected', $name);
+        push @{ $self->_wait_ready } => $request;
+        
+        $self->_log(info => 'Autoconnect before first request');
+        $self->restart;
+        return;
+
     schema:
     connecting:
         $self->_log(info => 'Defer request "%s" until schema loaded', $name);
@@ -430,14 +432,18 @@ sub request {
     index:
         $space = $args[0];
         unless (exists $self->_sch->{ $space }) {
-            $cb->(ER_NOSPACE => "Space $space not found");
+            $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+            $cb->(@{ $self->last_error });
             return;
         }
         $args[0] = $self->_sch->{ $space }{id};
         
         $index = $args[1];
         unless (exists $self->_sch->{ $space }{indexes}{ $index }) {
-            $cb->(ER_NOINDEX => "Index space[$space].$index not found");
+            $self->_set_last_error(
+                [ER_NOINDEX => "Index space[$space].$index not found"]
+            );
+            $cb->(@{ $self->last_error });
             return;
         }
 
@@ -447,7 +453,8 @@ sub request {
     normal:
         $space = $args[0];
         unless (exists $self->_sch->{ $space }) {
-            $cb->(ER_NOSPACE => "Space $space not found");
+            $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+            $cb->(@{ $self->last_error });
             return;
         }
         $space = $args[0] = $self->_sch->{ $space }{id};
@@ -459,7 +466,8 @@ sub request {
         }
         goto do_request unless defined $space;
         unless (exists $self->_sch->{ $space }) {
-            $cb->(ER_NOSPACE => "Space $space not found");
+            $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+            $cb->(@{ $self->last_error });
             return;
         }
         $space = $self->_sch->{ $space }{id};
@@ -497,7 +505,10 @@ sub request {
             }
 
             unless ($resp->{CODE} == 0) {
-                $cb->(ER_REQUEST => $resp->{ERROR}, $resp->{CODE});
+                $self->_set_last_error(
+                    [ ER_REQUEST => $resp->{ERROR}, $resp->{CODE} ]
+                );
+                $cb->(@{ $self->last_error });
                 return;
             }
             $self->_tuples($resp, $space, $cb);
