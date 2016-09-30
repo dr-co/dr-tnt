@@ -23,7 +23,6 @@ sub request {
     return $self->_response($m, $status, $message, $resp);
 }
 
-with 'DR::Tnt::Role::Logging';
 with 'DR::Tnt::Client::Role::LikeSync';
 
 __PACKAGE__->meta->make_immutable;

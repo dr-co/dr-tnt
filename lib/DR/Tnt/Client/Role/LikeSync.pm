@@ -5,6 +5,7 @@ use warnings;
 use DR::Tnt::FullCb;
 package DR::Tnt::Client::Role::LikeSync;
 use Mouse::Role;
+with 'DR::Tnt::Role::Logging';
 
 has host                => is => 'ro', isa => 'Str', required => 1;
 has port                => is => 'ro', isa => 'Str', required => 1;
