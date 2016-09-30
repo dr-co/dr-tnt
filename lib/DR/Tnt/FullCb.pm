@@ -26,24 +26,6 @@ use Mouse::Util::TypeConstraints;
 
 no Mouse::Util::TypeConstraints;
 
-
-# internal lua
-our %INT_LUA;
-
-{
-    my $k;
-    while (<DATA>) {
-        if (/^\@\@\s*(\S+)\s*$/m) {
-            $k = $1;
-            $INT_LUA{$k} = '';
-            next;
-        }
-
-        next unless $k;
-        $INT_LUA{$k} .= $_;
-    }
-}
-
 has logger              => is => 'ro', isa => 'Maybe[CodeRef]';
 has host                => is => 'ro', isa => 'Str', required => 1;
 has port                => is => 'ro', isa => 'Str', required => 1;
@@ -51,6 +33,7 @@ has user                => is => 'ro', isa => 'Maybe[Str]';
 has password            => is => 'ro', isa => 'Maybe[Str]';
 has driver              => is => 'ro', isa => 'DriverType', required => 1;
 has reconnect_interval  => is => 'ro', isa => 'Maybe[Num]';
+has hashify_tuples      => is => 'ro', isa => 'Bool', default => 0;
 has lua_dir =>
     is          => 'ro',
     isa         => 'Maybe[FilePath]',
@@ -375,43 +358,38 @@ sub _tuples {
     my $res = $resp->{DATA} // [];
     $space = $self->_sch->{ $space };
 
-    goto skip;
+    if ($self->hashify_tuples) {
+        for my $tuple (@$res) {
+            next unless 'ARRAY' eq ref $tuple;
+            my %t;
 
-    for my $tuple (@$res) {
-        next unless 'ARRAY' eq ref $tuple;
-        my %t;
+            for (0 .. $#{ $space->{fields} }) {
+                my $fname = $space->{fields}[$_]{name} // sprintf "field:%02X", $_;
+                $t{$fname} = $tuple->[$_];
+            }
 
-        for (0 .. $#{ $space->{fields} }) {
-            my $fname = $space->{fields}[$_]{name} // sprintf "field:%02X", $_;
-            $t{$fname} = $tuple->[$_];
+            $t{tail} = [ splice @$tuple, scalar @{ $space->{fields} } ];
+
+            $tuple = \%t;
         }
-
-        $t{tail} = [ splice @$tuple, scalar @{ $space->{fields} } ];
-
-        $tuple = \%t;
     }
 
-    skip:
-
-        $cb->(OK => 'Response received', $res);
+    $cb->(OK => 'Response received', $res);
 }
-
-
 
 sub request {
     my $cb = pop;
     my ($self, $name, @args) = @_;
 
     my $request = [ $name, @args, $cb ];
-    
    
     # all states waits ready
     goto $self->state;
 
-
     init:
     schema:
     connecting:
+        $self->_log(info => 'Defer request "%s" until schema loaded', $name);
         push @{ $self->_wait_ready } => $request;
         return;
 
@@ -420,6 +398,8 @@ sub request {
             $cb->(@{ $self->last_error });
             return;
         }
+
+        $self->_log(info => 'Defer request "%s" until reconnected', $name);
         push @{ $self->_wait_ready } => $request;
         $self->_reconnector->check_pause;
         return;
@@ -510,6 +490,7 @@ sub request {
             # schema collision
             if ($resp->{CODE} == 0x806D) {
                 $self->_log(error => 'Detected schema collision');
+                $self->_log(info => 'Defer request "%s" until schema loaded', $name);
                 push @{ $self->_wait_ready } => $request;
                 $self->_invalid_schema(sub {}) if $self->state eq 'ready';
                 return;
@@ -522,45 +503,7 @@ sub request {
             $self->_tuples($resp, $space, $cb);
         });
     });
-
 }
 
-
-
 __PACKAGE__->meta->make_immutable;
-
-__DATA__
-@@ perl-driver.schema.lua
-
-local res = {}
-for _, ispace in box.space._space:pairs() do
-    local space = {
-        id          = ispace[1],
-        name        = ispace[3],
-        engine      = ispace[4],
-        flags       = ispace[6],
-        format      = ispace[7],
-        index       = {}
-    }
-
-    for _, iindex in box.space._index:pairs() do
-        if iindex[1] == space.id then
-            local fields = {}
-
-            for idx, tp in pairs(iindex[6]) do
-                fields[ tp[1] ] = tp[2]
-
-            end
-            table.insert(space.index, {
-                name    = iindex[3],
-                type    = iindex[4],
-                flags   = iindex[5],
-                fields  = fields
-            })
-        end
-    end
-    
-    table.insert(res, space)
-end
-return res
 
