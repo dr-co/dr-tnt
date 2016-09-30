@@ -2,25 +2,24 @@ use utf8;
 use strict;
 use warnings;
 
-package DR::Tnt::Client::Coro;
+package DR::Tnt::Client::Sync;
 use Carp;
-use Coro;
 use Mouse;
 
-sub driver { 'async' }
+sub driver { 'sync' }
 
 sub request {
     my ($self, @args) = @_;
 
-    my $cb = Coro::rouse_cb;
+    my ($status, $message, $resp);
+    my $cb = sub { ($status, $message, $resp) = @_ };
     
     my $m = $args[0];
 
     splice @args, 0, 1, 'select' if $m eq 'get';
 
     $self->_fcb->request(@args, $cb);
-    my ($status, $message, $resp) = Coro::rouse_wait $cb;
-
+   
     return $self->_response($m, $status, $message, $resp);
 }
 

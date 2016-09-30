@@ -11,7 +11,7 @@ use Encode qw(decode encode);
 
 
 BEGIN {
-    use_ok 'DR::Tnt::Client::Coro';
+    use_ok 'DR::Tnt::Client::Sync';
     use_ok 'DR::Tnt::Test';
 }
 
@@ -30,7 +30,7 @@ sub LOGGER {
     note "$now [$level] $message";
 }
 
-my $c = DR::Tnt::Client::Coro->new(
+my $c = DR::Tnt::Client::Sync->new(
     host            => 'localhost',
     port            => $ti->port,
     user            => 'testrwe',
@@ -38,7 +38,7 @@ my $c = DR::Tnt::Client::Coro->new(
     logger          => \&LOGGER,
     hashify_tuples  => 1,
 );
-isa_ok $c => DR::Tnt::Client::Coro::, 'connector created';
+isa_ok $c => DR::Tnt::Client::Sync::, 'connector created';
 for (+note 'ping') {
     is $c->ping, 1, 'ping';
 }
