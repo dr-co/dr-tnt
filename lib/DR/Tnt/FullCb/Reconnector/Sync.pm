@@ -38,7 +38,7 @@ sub check_pause {
     $self->fcb->restart;
 }
 
-has _ll  =>
+has ll  =>
     is          => 'ro',
     isa         => 'DR::Tnt::LowLevel',
     lazy        => 1,

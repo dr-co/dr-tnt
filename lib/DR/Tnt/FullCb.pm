@@ -118,7 +118,7 @@ sub restart {
     pause:
     ready:
         $self->_set_state('connecting');
-        $self->_reconnector->_ll->connect(sub {
+        $self->_reconnector->ll->connect(sub {
             my ($state, $message) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
@@ -127,7 +127,7 @@ sub restart {
                 return;
             }
 
-            $self->_reconnector->_ll->handshake(sub {
+            $self->_reconnector->ll->handshake(sub {
                 my ($state, $message) = @_;
                 unless ($state eq 'OK') {
                     $self->_set_last_error([ $state, $message ]);
@@ -140,7 +140,7 @@ sub restart {
                     return $self->_preeval_lua($cb);
                 }
 
-                $self->_reconnector->_ll->send_request(auth => undef, sub {
+                $self->_reconnector->ll->send_request(auth => undef, sub {
                     my ($state, $message, $sync) = @_;
                     unless ($state eq 'OK') {
                         $self->_set_last_error([ $state, $message ]);
@@ -149,7 +149,7 @@ sub restart {
                         return;
                     }
 
-                    $self->_reconnector->_ll->wait_response($sync, sub {
+                    $self->_reconnector->ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
@@ -204,7 +204,7 @@ sub _preeval_unsent_lua {
     if (open my $fh, '<:raw', $lua) {
         local $/;
         my $body = <$fh>;
-        $self->_reconnector->_ll->send_request(eval_lua => undef, $body, sub {
+        $self->_reconnector->ll->send_request(eval_lua => undef, $body, sub {
             my ($state, $message, $sync) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
@@ -213,7 +213,7 @@ sub _preeval_unsent_lua {
                 return;
             }
 
-            $self->_reconnector->_ll->wait_response($sync, sub {
+            $self->_reconnector->ll->wait_response($sync, sub {
                 my ($state, $message, $resp) = @_;
                 unless ($state eq 'OK') {
                     $self->_set_last_error([ $state, $message ]);
@@ -260,7 +260,7 @@ sub _invalid_schema {
     connecting:
     ready:
         $self->_set_state('schema');
-        $self->_reconnector->_ll->send_request(select =>
+        $self->_reconnector->ll->send_request(select =>
                                 undef, 280, 0, [], undef, undef, 'ALL', sub {
             my ($state, $message, $sync) = @_;
             $self->_log(debug => 'Loading spaces');
@@ -271,7 +271,7 @@ sub _invalid_schema {
                 return;
             }
 
-            $self->_reconnector->_ll->wait_response($sync, sub {
+            $self->_reconnector->ll->wait_response($sync, sub {
                 my ($state, $message, $resp) = @_;
                 unless ($state eq 'OK') {
                         warn $message;
@@ -285,7 +285,7 @@ sub _invalid_schema {
                 # TODO: $resp->{CODE}
 
                 $self->_log(debug => 'Loading indexes');
-                $self->_reconnector->_ll->send_request(select =>
+                $self->_reconnector->ll->send_request(select =>
                     $resp->{SCHEMA_ID}, 288, 0, [], undef, undef, 'ALL', sub { 
 
                     my ($state, $message, $sync) = @_;
@@ -297,7 +297,7 @@ sub _invalid_schema {
                     }
 
                     # TODO: $resp->{CODE}
-                    $self->_reconnector->_ll->wait_response($sync, sub {
+                    $self->_reconnector->ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
@@ -489,7 +489,7 @@ sub request {
 
     do_request:
 
-    $self->_reconnector->_ll->send_request($name, $self->last_schema, @args, sub {
+    $self->_reconnector->ll->send_request($name, $self->last_schema, @args, sub {
         my ($state, $message, $sync) = @_;
         unless ($state eq 'OK') {
             $self->_set_last_error([ $state => $message ]);
@@ -498,7 +498,7 @@ sub request {
             return;
         }
 
-        $self->_reconnector->_ll->wait_response($sync, sub {
+        $self->_reconnector->ll->wait_response($sync, sub {
             my ($state, $message, $resp) = @_;
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state => $message ]);
