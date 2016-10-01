@@ -77,6 +77,69 @@ DR::Tnt - driver/connector for tarantool
     my $tuples = $tnt->eval_lua('return 123');
     my $hashify_tuples = $tnt->eval_lua(['return 123' => 'myspace' ]);
 
+=head1 DESCRIPTION
+
+
+This module provides a synchronous and asynchronous driver for
+L<Tarantool|http://tarantool.org>.
+
+The driver supports three work flow types:
+
+=over
+
+=item L<DR::Tnt::Client::AE>
+
+The primary type, provides an asynchronous, callback-based 
+API. Requires a running L<AnyEvent> machine.
+
+=item L<DR::Tnt::Client::Sync>
+
+Synchronous driver (based on L<IO::Socket::INET>/L<IO::Socket::UNIX>).
+
+=item L<DR::Tnt::Client::Coro>
+
+L<Coro>'s driver, uses L<DR::Tnt::Client::AE>.
+
+=back
+
+The module does L<require> and makes instance of 
+selected driver.
+
+=head2 Attributes
+
+=over
+
+=item host, port
+
+Connection point for tarantool instance. If host contains C<unix/>, port
+have to contain valid unix path to opened socket.
+
+=item user, password
+
+Auth arguments.
+
+=item lua_dir
+
+Directory that contains some lua files. After connecting, the driver sends
+L<$tnt->eval_lua> for each file in the directory. So You can use the mechanizm
+to store some values to C<box.session.storage>.
+
+=item hashify_tuples
+
+If the option is set to C<TRUE>, then the driver will extract tuples
+to hash by C<box.space._space> schema.
+
+=item reconnect_interval
+
+Internal to reconnect after disconnect or fatal errors. Undefined value
+disables the mechanizm.
+
+=item raise_error
+
+The option is actual for C<coro> and C<sync> drivers
+(L<DR::Tnt::Client::Coro> and L<DR::Tnt::Client::Sync>).
+
+=back
 
 =cut
 1;
