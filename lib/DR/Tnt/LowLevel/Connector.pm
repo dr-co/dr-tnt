@@ -8,6 +8,7 @@ use DR::Tnt::Proto;
 use List::MoreUtils 'any';
 use feature 'state';
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use Data::Dumper;
 use feature 'switch';
 use Time::HiRes ();
@@ -195,11 +196,11 @@ sub send_request {
 
         state $ra = {
             auth    => sub {
-                my $self = shift;
+                my ($self, $schema_id, $user, $password) = @_;
                 return (
-                    @_,
-                    $self->user,
-                    $self->password,
+                    $schema_id,
+                    $user // $self->user,
+                    $password // $self->password,
                     $self->greeting->{salt},
                 );
             }

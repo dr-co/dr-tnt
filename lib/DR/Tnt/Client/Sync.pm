@@ -4,6 +4,7 @@ use warnings;
 
 package DR::Tnt::Client::Sync;
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use Mouse;
 
 sub driver { 'sync' }

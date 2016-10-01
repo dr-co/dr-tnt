@@ -17,6 +17,7 @@ our @EXPORT_OK = qw(
     ping
 );
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use DR::Msgpuck;
 use Digest::SHA;
 use Scalar::Util 'looks_like_number';

@@ -8,6 +8,7 @@ use Mouse;
 require DR::Tnt::LowLevel;
 use File::Spec::Functions 'catfile', 'rel2abs';
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use DR::Tnt::Dumper;
 with 'DR::Tnt::Role::Logging';
 use Scalar::Util;
@@ -511,6 +512,7 @@ sub request {
                 $cb->(@{ $self->last_error });
                 return;
             }
+            $self->_set_last_error(undef);
             $self->_tuples($resp, $space, $cb);
         });
     });

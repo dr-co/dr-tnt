@@ -6,6 +6,8 @@ use DR::Tnt::FullCb;
 package DR::Tnt::Client::Role::LikeSync;
 use Mouse::Role;
 with 'DR::Tnt::Role::Logging';
+use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 
 has host                => is => 'ro', isa => 'Str', required => 1;
 has port                => is => 'ro', isa => 'Str', required => 1;
@@ -34,7 +36,7 @@ my @methods = qw(
 
 for my $m (@methods) {
     no strict 'refs';
-    *{ $m } = sub {
+    *{ $m } = sub :method {
         my $self = shift;
         unshift @_ => $m;
         $self->request(@_);

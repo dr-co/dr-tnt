@@ -4,6 +4,7 @@ use warnings;
 
 package DR::Tnt::Client::Coro;
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use Coro;
 use Mouse;
 
