@@ -87,7 +87,7 @@ $c->send_request(ping => 7000, sub {
         isa_ok $resp => 'HASH';
         is $resp->{SYNC}, $sync, 'sync';
        
-        diag $resp unless
+        diag explain $resp unless
             ok $resp->{CODE} & 0x8000 , 'code (schema error)';
         like $resp->{ERROR}, qr{Wrong schema version}, 'error text';
         like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';

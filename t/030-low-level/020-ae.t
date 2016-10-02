@@ -111,7 +111,8 @@ for my $cv (AE::cv) {
             isa_ok $resp => 'HASH';
             is $resp->{SYNC}, $sync, 'sync';
             
-            ok $resp->{CODE} & 0x8000 , 'code (schema error)';
+            diag explain $resp unless
+                ok $resp->{CODE} & 0x8000 , 'code (schema error)';
             like $resp->{ERROR}, qr{Wrong schema version}, 'error text';
             like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
             isnt $resp->{SCHEMA_ID}, 7000, 'schema id';
