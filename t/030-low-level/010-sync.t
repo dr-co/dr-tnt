@@ -73,7 +73,7 @@ $c->wait_response(1, sub {
 
 
 note 'schema collision';
-$c->send_request(ping => 7000, sub {
+$c->send_request(ping => 1, sub {
     my ($code, $message, $sync) = @_;
     is $code, 'OK', 'ping was send';
     is $c->connector->state, 'ready', 'state';
