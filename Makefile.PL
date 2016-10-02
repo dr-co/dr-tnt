@@ -24,7 +24,6 @@ WriteMakefile(
     test    => {
         RECURSIVE_TEST_FILES    => 1,
     },
-#    TESTS => q{`find t -type f -name '*.t'|sort`},
     ($] >= 5.005 ?
       (ABSTRACT_FROM  => 'lib/DR/Tnt.pm',
        AUTHOR         => 'Dmitry E. Oboukhov <unera@debian.org>') : ()),
