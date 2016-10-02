@@ -7,4 +7,4 @@ perl:
   - "5.14"
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get -qq tarantool
+  - sudo apt-get -qq install tarantool
