@@ -13,3 +13,4 @@ before_install:
   - echo deb https://packagecloud.io/tarantool/1_6/`lsb_release -i -s|perl -p -e 's/.*/lc $&/ge'`/ `lsb_release -c -s` main|sudo tee /etc/apt/sources.list.d/tarantool.list
   - sudo apt-get -qq update
   - sudo apt-get -qq install tarantool
+  - tarantool --version
