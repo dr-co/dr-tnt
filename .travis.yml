@@ -1,10 +1,5 @@
 language: perl
 
-matrix:
-  include:
-    - os: linux
-    - dist: stretch
-    - sudo: required
 perl:
   - "5.14"
   - "5.16"
