@@ -14,6 +14,7 @@ BEGIN {
     use_ok 'DR::Tnt::Client::AE';
     use_ok 'DR::Tnt::Test';
     use_ok 'AnyEvent';
+    tarantool_version_check(1.6);
 }
 
 
