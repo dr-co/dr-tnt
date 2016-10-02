@@ -364,8 +364,11 @@ sub _tuples {
                 $t{$fname} = $tuple->[$_];
             }
 
-            $t{tail} = [ splice @$tuple, scalar @{ $space->{fields} } ];
-
+            if (@{ $space->{fields} } < @$tuple) {
+                $t{tail} = [ splice @$tuple, scalar @{ $space->{fields} } ];
+            } else {
+                $t{tail} = [];
+            }
             $tuple = \%t;
         }
     }
