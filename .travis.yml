@@ -1,14 +1,5 @@
 language: perl
 
-os:
-  - linux
-
-matrix:
-  include:
-    - os: linux
-      dist: stretch
-      sudo: required
-
 perl:
   - "5.14"
   - "5.16"
@@ -18,6 +9,6 @@ perl:
 before_install:
   - lsb_release -c -s
   - curl -s http://download.tarantool.org/tarantool/1.7/gpgkey | sudo apt-key add -
-  - echo deb http://download.tarantool.org/tarantool/1.7/debian/ `lsb_release -c -s` main|sudo tee /etc/apt/sources.list.d/tarantool_1_7.list
+  - echo deb http://download.tarantool.org/tarantool/1.7/`lsb_release -i -s|perl -p -e 's/.*/lc $&/ge'`/ `lsb_release -c -s` main|sudo tee /etc/apt/sources.list.d/tarantool_1_7.list
   - sudo apt-get -qq update
   - sudo apt-get -qq install tarantool
