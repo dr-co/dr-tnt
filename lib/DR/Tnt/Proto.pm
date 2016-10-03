@@ -108,8 +108,8 @@ BEGIN {
 }
 
 
-sub raw_response($) {
-    my ($response) = @_;
+sub raw_response($$) {
+    my ($response, $utf8) = @_;
 
     my $len;
     {
@@ -133,7 +133,11 @@ sub raw_response($) {
         my $len_item = DR::Msgpuck::msgunpack_check $sp;
         croak sprintf('Broken %s section of response', $_)
             unless $len_item and $len_item + $off <= length $response;
-        push @r => DR::Msgpuck::msgunpack $sp;
+        if ($utf8) {
+            push @r => DR::Msgpuck::msgunpack_utf8 $sp;
+        } else {
+            push @r => DR::Msgpuck::msgunpack $sp;
+        }
         $off += $len_item;
 
         if ($_ eq 2 and $off == length $response) {
@@ -148,9 +152,10 @@ sub raw_response($) {
     return [ $r[1], $r[2] ], substr $response, $off;
 }
 
-sub response($) {
+sub response($;$) {
 
-    my ($resp, $tail) = raw_response($_[0]);
+    my ($buffer, $utf8) = @_;
+    my ($resp, $tail) = raw_response($buffer => $utf8);
     return unless $resp;
     my ($h, $b) = @$resp;
 

@@ -27,7 +27,7 @@ has host        => is => 'ro', isa => 'Str', required => 1;
 has port        => is => 'ro', isa => 'Str', required => 1;
 has user        => is => 'ro', isa => 'Maybe[Str]';
 has password    => is => 'ro', isa => 'Maybe[Str]';
-
+has utf8        => is => 'ro', isa => 'Bool', default => 1;
 
 has state =>
     is => 'rw',
@@ -264,7 +264,7 @@ sub check_rbuf {
 
     ready: {
         while (length $self->rbuf) {
-            my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf);
+            my ($res, $tail) = DR::Tnt::Proto::response($self->rbuf, $self->utf8);
             return $found unless defined $res;
             
             $found++;

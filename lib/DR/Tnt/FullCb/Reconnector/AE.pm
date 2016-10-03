@@ -54,7 +54,8 @@ has ll  =>
             port            => $self->fcb->port,
             user            => $self->fcb->user,
             password        => $self->fcb->password,
-            connector_class => 'DR::Tnt::LowLevel::Connector::AE'
+            connector_class => 'DR::Tnt::LowLevel::Connector::AE',
+            utf8            => $self->fcb->utf8,
         );
     };
 

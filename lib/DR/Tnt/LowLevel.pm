@@ -22,6 +22,7 @@ has connector   =>
             port        => $self->port,
             user        => $self->user,
             password    => $self->password,
+            utf8        => $self->utf8,
         );
     },
     handles => [
@@ -36,6 +37,6 @@ has host                => is => 'ro', isa => 'Str', required => 1;
 has port                => is => 'ro', isa => 'Str', required => 1;
 has user                => is => 'ro', isa => 'Maybe[Str]';
 has password            => is => 'ro', isa => 'Maybe[Str]';
-
+has utf8                => is => 'ro', isa => 'Bool', default => 1;
 
 __PACKAGE__->meta->make_immutable;

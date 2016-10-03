@@ -16,6 +16,7 @@ has password            => is => 'ro', isa => 'Maybe[Str]';
 has reconnect_interval  => is => 'ro', isa => 'Maybe[Num]';
 has hashify_tuples      => is => 'ro', isa => 'Bool', default => 0;
 has lua_dir             => is => 'ro', isa => 'Maybe[Str]';
+has utf8                => is => 'ro', isa => 'Bool', default => 1;
 
 has raise_error         => is => 'ro', isa => 'Bool', default => 1;
 
@@ -92,6 +93,7 @@ has _fcb =>
             hashify_tuples      => $self->hashify_tuples,
             lua_dir             => $self->lua_dir,
             driver              => $self->driver,
+            utf8                => $self->utf8,
         )
     };
 

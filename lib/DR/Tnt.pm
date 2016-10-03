@@ -19,9 +19,9 @@ sub tarantool {
     unless (any { $driver eq $_ } 'sync', 'ae', 'async', 'coro') {
         goto usage;
     }
-    goto $opts{driver};
 
 
+    goto $driver;
     sync:
         require DR::Tnt::Client::Sync;
         return DR::Tnt::Client::Sync->new(%opts);
@@ -37,7 +37,7 @@ sub tarantool {
 
 
     usage:
-
+        croak "Too few information about tarantool connection";
 }
 
 
@@ -138,6 +138,11 @@ disables the mechanizm.
 
 The option is actual for C<coro> and C<sync> drivers
 (L<DR::Tnt::Client::Coro> and L<DR::Tnt::Client::Sync>).
+
+=item utf8
+
+Default value is C<TRUE>. If C<TRUE>, driver will unpack all
+strings as C<utf8>-decoded strings.
 
 =back
 

@@ -30,6 +30,7 @@ has password            => is => 'ro', isa => 'Maybe[Str]';
 has driver              => is => 'ro', isa => 'DriverType', required => 1;
 has reconnect_interval  => is => 'ro', isa => 'Maybe[Num]';
 has hashify_tuples      => is => 'ro', isa => 'Bool', default => 0;
+has utf8                => is => 'ro', isa => 'Bool', default => 1;
 has lua_dir =>
     is          => 'ro',
     isa         => 'Maybe[Str]',
