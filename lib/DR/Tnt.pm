@@ -146,5 +146,35 @@ strings as C<utf8>-decoded strings.
 
 =back
 
+=head2 Information attributes
+
+=over
+
+=item last_error
+
+Contains array of last error.
+If there was no errors, the attrubute contains C<undef>.
+
+The array can contain two or three elements:
+
+=over
+
+=item *
+
+String error identifier. Example: C<ER_SOCKET> or C<ER_REQUEST>.
+
+=item *
+
+Error message. Example: 'C<Connection timeout>'
+
+=item *
+
+Tarantool code. Optional parameter. Example C<0x806D>.
+The code is present only for tarantool errors (like lua error, etc).
+
+=back
+
+=back
+
 =cut
 1;
