@@ -87,6 +87,28 @@ ping_test $c;
 
 
 
+
+for ('first auth', 'second auth') {
+    note $_ . ' test';
+    $c->send_request(auth => undef, sub {
+        my ($code, $message, $sync) = @_;
+        is $code, 'OK', "$_ was send";
+        is $c->connector->state, 'ready', 'state';
+        isnt $sync, 1, 'next_sync';
+        ok exists $c->connector->_active_sync->{$sync}, 'active sync';
+
+        $c->wait_response($sync, sub {
+            my ($code, $message, $resp) = @_;
+            is $code => 'OK', 'auth response';
+
+            isa_ok $resp => 'HASH';
+            is $resp->{SYNC}, $sync, 'sync';
+            is $resp->{CODE}, 0, 'auth passed'; 
+            like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
+        });
+    });
+}
+
 note 'schema collision';
 $c->send_request(call_lua => 7000, 'lua_ping', sub {
     my ($code, $message, $sync) = @_;
@@ -110,27 +132,6 @@ $c->send_request(call_lua => 7000, 'lua_ping', sub {
     });
 });
 
-
-for ('first auth', 'second auth') {
-    note $_ . ' test';
-    $c->send_request(auth => undef, sub {
-        my ($code, $message, $sync) = @_;
-        is $code, 'OK', "$_ was send";
-        is $c->connector->state, 'ready', 'state';
-        isnt $sync, 1, 'next_sync';
-        ok exists $c->connector->_active_sync->{$sync}, 'active sync';
-
-        $c->wait_response($sync, sub {
-            my ($code, $message, $resp) = @_;
-            is $code => 'OK', 'auth response';
-
-            isa_ok $resp => 'HASH';
-            is $resp->{SYNC}, $sync, 'sync';
-            is $resp->{CODE}, 0, 'auth passed'; 
-            like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
-        });
-    });
-}
 
 
 $ti->stop;
