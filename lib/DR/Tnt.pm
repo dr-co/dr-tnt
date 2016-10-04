@@ -4,7 +4,7 @@ use warnings;
 
 package DR::Tnt;
 use base qw(Exporter);
-our $VERSION = '0.02';
+our $VERSION = '0.04';
 our @EXPORT = qw(tarantool);
 use List::MoreUtils 'any';
 
@@ -40,6 +40,9 @@ sub tarantool {
         croak "Too few information about tarantool connection";
 }
 
+1;
+
+__END__
 
 =head1 NAME
 
@@ -104,6 +107,31 @@ L<Coro>'s driver, uses L<DR::Tnt::Client::AE>.
 
 The module does L<require> and makes instance of 
 selected driver.
+
+=head1 METHODS
+
+=head2 tarantool
+
+Loads selected driver and returns connector.
+
+You can choose one driver:
+
+=over
+
+=item sync
+
+L<DR::Tnt::Client::Sync> will be loaded and created.
+
+=item ae or async
+
+L<DR::Tnt::Client::AE> will be loaded and created.
+
+=item coro
+
+L<DR::Tnt::Client::Coro> will be loaded and created.
+
+=back
+
 
 =head2 Attributes
 
@@ -176,5 +204,89 @@ The code is present only for tarantool errors (like lua error, etc).
 
 =back
 
+=head1 CONNECTORS METHODS
+
+All connectors have the same API. AnyEvent's connector has the last
+argument - callback for results.
+
+If C<raise_error> is C<false>, C<coro> and C<sync> drivers will
+return C<undef> and store C<last_error>. Any successfuly call clears
+C<last_error> attribute.
+
+=over
+    
+=item auth
+
+    # auth by $tnt->user and $tnt->password
+    if ($tnt->auth) {
+
+    }
+
+    if ($tnt->auth($user, $password) {
+
+    }
+
+Auth user in tarantool. Note: The driver uses
+C<<$tnt->user>> and C<<$tnt->password>> attributes after reconnects.
+
+=item select
+
+    my $list = $tnt->select($space, $index, $key);
+    my $list = $tnt->select($space, $index, $key, $limit, $offset, $iterator);
+
+Select tuples from space. You can use space/index's names or numbers.
+
+Default values for C<$iterator> is C<'EQ'>, for C<$limit> is C<2**32>,
+for C<$offset> is C<0>.
+
+=item get
+
+    my $tuple = $tnt->get($space, $index, $key);
+
+The same as C<select>, but forces C<$limit> to C<1>, C<$offset> to C<0>,
+C<$iterator> to C<'EQ'> and returns the first tuple of result list.
+
+=item update
+
+    my $updated = $tnt->update($space, $key, [[ '=', 3, 'name' ]]);
+
+Update tuple in database.
+
+
+=item insert
+
+    my $inserted = $tnt->insert($space, [ $name, $value ]);
+
+=item replace
+
+    my $replaced = $tnt->replace($space, [ $name, $value ]);
+
+=item delete
+
+    my $deleted = $tnt->delete($space, $key);
+
+=item call_lua
+
+    my $tuples = $tnt->call_lua('my.lua.name', $arg1, $arg2);
+    
+    my $hashified_tuples = $tnt->call_lua(['box.space.name:select' => 'name'], 123);
+
+
+If C<proc_name> is C<ARRAYREF>, result tuples will be hashified as tuples
+of selected space.
+
+=item eval_lua
+
+    my $tuples = $tnt->eval_lua('return {{1}}');
+    my $hashified_tuples = $tnt->eval_lua(['return {{1}}' => 'name');
+
+=item ping
+
+    if ($tnt->ping) {
+        # connection established.
+    }
+
+=back
+
 =cut
-1;
+

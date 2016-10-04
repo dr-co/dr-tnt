@@ -27,7 +27,7 @@ my @methods = qw(
     update
     insert
     replace
-    delele
+    delete
     call_lua
     eval_lua
     ping
@@ -62,7 +62,7 @@ sub _response {
     update:
     insert:
     replace:
-    delele:
+    delete:
         $self->_log(error =>
             'Method %s returned more than one result (%s items)',
             $m,

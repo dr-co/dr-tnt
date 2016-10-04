@@ -17,7 +17,7 @@ sub request {
     
     my $m = $args[0];
 
-    splice @args, 0, 1, 'select' if $m eq 'get';
+    @args = ('select', @args[1, 2, 3], 1, 0, 'EQ') if $m eq 'get';
 
     $self->_fcb->request(@args, $cb);
    

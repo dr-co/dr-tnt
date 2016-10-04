@@ -45,7 +45,7 @@ my @methods = qw(
     update
     insert
     replace
-    delele
+    delete
     call_lua
     eval_lua
     ping
@@ -69,7 +69,8 @@ sub request {
 
     my $m = $args[0];
 
-    splice @args, 0, 1, 'select' if $m eq 'get';
+    @args = ('select', @args[1, 2, 3], 1, 0, 'EQ') if $m eq 'get';
+    
     $self->_fcb->request(@args,
         sub {
             my ($status, $message, $resp) = @_;
@@ -93,7 +94,7 @@ sub request {
             update:
             insert:
             replace:
-            delele:
+            delete:
                 $self->_log(error =>
                     'Method %s returned more than one result (%s items)',
                     $m,
@@ -112,3 +113,55 @@ sub request {
 }
 
 __PACKAGE__->meta->make_immutable;
+
+__END__
+
+=head1 NAME
+
+DR::Tnt::Client::AE - AnyEvent (async) driver for tarantool
+
+=head1 SYNOPSIS
+
+    use DR::Tnt;
+    my $tnt = tarantool
+                    host            => $host,
+                    port            => $port,
+                    user            => $user,
+                    password        => $password,
+                    lua_dir         => $lua_dir,
+                    hashify_tuples  => 1,
+                    driver          => 'async'
+    ;
+
+    # the same
+    use DR::Tnt::Client::AE;
+    my $tnt = DR::Tnt::Client::AE->new(
+                    host            => $host,
+                    port            => $port,
+                    user            => $user,
+                    password        => $password,
+                    lua_dir         => $lua_dir,
+                    hashify_tuples  => 1,
+                    driver          => 'async'
+    );
+
+
+    $tnt->ping(sub {
+        my $res = shift;
+        if ($res) {
+            say "ping ok";
+        } else {
+            say "can not ping: %s: %s", @{ $tnt->last_error };
+        }
+    });
+
+    $tnt->select($space, 'index', 'key', sub {
+        my ($list) = @_;
+        if ($list) {
+
+        } else {
+            say "can not select: %s: %s", @{ $tnt->last_error };
+        }
+    });
+
+=cut

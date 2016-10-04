@@ -423,7 +423,7 @@ sub request {
         update      => 'normal',
         insert      => 'normal',
         replace     => 'normal',
-        delele      => 'normal',
+        delete      => 'normal',
         call_lua    => 'mayberef',
         eval_lua    => 'mayberef',
         ping        => 'none',

@@ -185,7 +185,7 @@ sub send_request {
             update      => \&DR::Tnt::Proto::update,
             insert      => \&DR::Tnt::Proto::insert,
             replace     => \&DR::Tnt::Proto::replace,
-            delele      => \&DR::Tnt::Proto::del,
+            delete      => \&DR::Tnt::Proto::del,
             call_lua    => \&DR::Tnt::Proto::call_lua,
             eval_lua    => \&DR::Tnt::Proto::eval_lua,
             ping        => \&DR::Tnt::Proto::ping,
