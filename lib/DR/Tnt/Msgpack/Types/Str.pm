@@ -28,6 +28,25 @@ sub TO_MSGPACK {
 
 sub TO_JSON {
     my ($self) = @_;
+    return 'null' unless defined $$self;
     return sprintf '"%s"', quotemeta $$self;
 }
+
+=head1 NAME
+
+DR::Tnt::Msgpack::Types::Str - container for string.
+
+=head1 SYNOPSIS
+
+    use DR::Tnt::Msgpack::Types::Str;
+
+    my $o = DR::Tnt::Msgpack::Types::Str->new(123);
+    my $blob = msgpack($o);
+
+=head1 DESCRIPTION
+
+See L<DR::Tnt::Msgpack::Types>.
+
+=cut
+
 1;

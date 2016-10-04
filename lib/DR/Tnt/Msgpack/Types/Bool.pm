@@ -25,4 +25,21 @@ sub TO_JSON {
     return $$self ? 'true' : 'false';
 }
 
+=head1 NAME
+
+DR::Tnt::Msgpack::Types::Bool - container for bool.
+
+=head1 SYNOPSIS
+
+    use DR::Tnt::Msgpack::Types::Bool;
+
+    my $o = DR::Tnt::Msgpack::Types::Bool->new(1);
+    my $blob = msgpack($o);
+
+=head1 DESCRIPTION
+
+See L<DR::Tnt::Msgpack::Types>.
+
+=cut
+
 1;

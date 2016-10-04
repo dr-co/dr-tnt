@@ -30,15 +30,33 @@ sub TO_MSGPACK {
         return pack 'cq>', 0xD3, $v;
     }
     
-    return pack 'C',    $v          if $v <= 0x7F;
-    return pack 'Cs>',  0xD1, $v    if $v <= 0x7FFF;
-    return pack 'Cl>',  0xD2, $v    if $v <= 0x7FFF_FFFF;
+    return pack 'C',    $v                  if $v <= 0x7F;
+    return pack 'Cs>',  0xD1, $v            if $v <= 0x7FFF;
+    return pack 'Cl>',  0xD2, $v            if $v <= 0x7FFF_FFFF;
     return pack 'Cq>',  0xD3, $v;
 }
 
 sub TO_JSON {
     my ($self) = @_;
-    return $$self;
+    return $$self // 'null';
 }
+
+
+=head1 NAME
+
+DR::Tnt::Msgpack::Types::Int - container for integer.
+
+=head1 SYNOPSIS
+
+    use DR::Tnt::Msgpack::Types::Int;
+
+    my $o = DR::Tnt::Msgpack::Types::Int->new(123);
+    my $blob = msgpack($o);
+
+=head1 DESCRIPTION
+
+See L<DR::Tnt::Msgpack::Types>.
+
+=cut
 
 1;

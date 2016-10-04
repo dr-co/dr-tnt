@@ -256,6 +256,12 @@ sub msgunpack_check($) {
 }
 
 sub msgunpack_safely($) {
+    push @_ => 0;
+    goto \&_msgunpack;
+}
+
+sub msgunpack_safely_utf8($) {
+    push @_ => 1;
     goto \&_msgunpack;
 }
 
@@ -380,7 +386,11 @@ DR::Tnt::Msgpack - msgpack encoder/decoder.
 
     
     my $blob = msgpack { a => 'b', c => 123, d => [ 3, 4, 5 ] };
+    
     my $object = msgunpack $blob;
+    my $object = msgunpack_utf8 $blob;
+    
+    
     my ($object, $len) = msgunpack_safely $blob;
     my ($object, $len) = msgunpack_safely_utf8 $blob;
 
@@ -388,6 +398,39 @@ DR::Tnt::Msgpack - msgpack encoder/decoder.
         substr $blob, 0, $len, '';
         ...
     }
+
+    if (my $len = msgunpack_check $blob) {
+        # $blob contains msgpack with len=$len
+    }
+
+=head1 METHODS
+
+=head2 msgpack
+
+    my $blob = msgpack $scalar;
+    my $blob = msgpack \%hash;
+    my $blob = msgpack \@array;
+
+Pack any perl object to msgpack. Blessed objects have to have C<TO_MSGPACK>
+methods.
+
+=head2 msgunpack
+
+Unpack msgpack'ed string to perl object. Throws exception if buffer is invalid.
+Booleans are extracted to L<DR::Tnt::Msgpack::Types::Bool>,
+see also L<DR::Tnt::Msgpack::Types>.
+
+=head2 msgunpack_utf8
+
+The same as L</msgunpack>. Decode utf8 for each string.
+
+=head2 msgunpack_safely, msgunpack_safely_utf8
+
+Unpack msgpack'ed string to perl object.
+Don't throw exception if buffer is invalid.
+
+Return unpacked object and length of unpacked object. If length is C<undef>,
+buffer is invalid.
 
 =cut
 
