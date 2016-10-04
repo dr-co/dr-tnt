@@ -25,3 +25,8 @@ _G.restart =
         log.info('Restarting tarantool')
         os.execute('tarantool ' .. arg[0] .. ' ' .. (port + 1))
     end
+
+_G.lua_ping =
+    function()
+        return {{ true }}
+    end

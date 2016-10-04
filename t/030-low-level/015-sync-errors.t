@@ -88,7 +88,7 @@ ping_test $c;
 
 
 note 'schema collision';
-$c->send_request(ping => 7000, sub {
+$c->send_request(call_lua => 7000, 'lua_ping', sub {
     my ($code, $message, $sync) = @_;
     is $code, 'OK', 'ping was send';
     is $c->connector->state, 'ready', 'state';
