@@ -10,13 +10,19 @@ lib/DR/Tnt/LowLevel/Connector/AE.pm
 lib/DR/Tnt/LowLevel/Connector.pm
 lib/DR/Tnt/LowLevel/Connector/Sync.pm
 lib/DR/Tnt/LowLevel.pm
+lib/DR/Tnt/Msgpack.pm
+lib/DR/Tnt/Msgpack/Types/Blob.pm
+lib/DR/Tnt/Msgpack/Types/Bool.pm
+lib/DR/Tnt/Msgpack/Types/Int.pm
+lib/DR/Tnt/Msgpack/Types.pm
+lib/DR/Tnt/Msgpack/Types/Str.pm
 lib/DR/Tnt.pm
 lib/DR/Tnt/Proto.pm
 lib/DR/Tnt/Role/Logging.pm
 lib/DR/Tnt/Test.pm
 lib/DR/Tnt/Test/TntInstance.pm
 Makefile.PL
-MANIFEST
+MANIFEST			This list of files
 t/010-comon/010-find-free-port.t
 t/010-comon/020-tarantool-version.t
 t/010-comon/030-version-check.t
@@ -24,6 +30,9 @@ t/010-comon/040-start-tnt.t
 t/010-comon/050-run-at-port.t
 t/010-comon/lua/run.lua
 t/010-comon/lua/run-test.lua
+t/010-comon/msgpack/010-pack.t
+t/010-comon/msgpack/020-unpack.t
+t/010-comon/msgpack/030-types.t
 t/020-proto/010-tnt-proto.t
 t/020-proto/020-connect.t
 t/020-proto/lua/server.lua
@@ -42,6 +51,10 @@ t/040-full/hashify/010-ae.t
 t/040-full/lua/easy.lua
 t/040-full/lua/start/00-test.lua
 t/100-connector/010-coro/010-base.t
+t/100-connector/010-coro/020-utf8.t
 t/100-connector/020-sync/010-base.t
+t/100-connector/020-sync/020-utf8.t
 t/100-connector/030-ae/010-base.t
+t/100-connector/030-ae/020-utf8.t
 t/100-connector/lua/easy.lua
+.travis.yml
