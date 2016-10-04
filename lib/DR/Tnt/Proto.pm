@@ -18,7 +18,7 @@ our @EXPORT_OK = qw(
 );
 use Carp;
 $Carp::Internal{ (__PACKAGE__) }++;
-use DR::Msgpuck;
+use DR::Tnt::Msgpack;
 use Digest::SHA;
 use Scalar::Util 'looks_like_number';
 use Digest::SHA 'sha1';
@@ -116,9 +116,9 @@ sub raw_response($$) {
         return unless defined $response;
         my $lenheader = length $response > 10 ?
             substr $response, 0, 10 : $response;
-        return unless my $lenlen = DR::Msgpuck::msgunpack_check $lenheader;
+        return unless my $lenlen = DR::Tnt::Msgpack::msgunpack_check $lenheader;
 
-        $len = DR::Msgpuck::msgunpack $lenheader;
+        $len = DR::Tnt::Msgpack::msgunpack $lenheader;
         croak 'Unexpected msgpack object ' . ref($len) if ref $len;
         $len += $lenlen;
     }
@@ -130,13 +130,13 @@ sub raw_response($$) {
 
     for (1 .. 3) {
         my $sp = $off ? substr $response, $off : $response;
-        my $len_item = DR::Msgpuck::msgunpack_check $sp;
+        my $len_item = DR::Tnt::Msgpack::msgunpack_check $sp;
         croak sprintf('Broken %s section of response', $_)
             unless $len_item and $len_item + $off <= length $response;
         if ($utf8) {
-            push @r => DR::Msgpuck::msgunpack_utf8 $sp;
+            push @r => DR::Tnt::Msgpack::msgunpack_utf8 $sp;
         } else {
-            push @r => DR::Msgpuck::msgunpack $sp;
+            push @r => DR::Tnt::Msgpack::msgunpack $sp;
         }
         $off += $len_item;
 

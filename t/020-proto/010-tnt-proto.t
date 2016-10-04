@@ -12,7 +12,7 @@ use Encode qw(decode encode);
 
 BEGIN {
     use_ok 'DR::Tnt::Proto';
-    use_ok 'DR::Msgpuck';
+    use_ok 'DR::Tnt::Msgpack';
     use_ok 'Data::Dumper';
 }
 

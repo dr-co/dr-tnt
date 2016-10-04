@@ -6,12 +6,13 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 70;
+use Test::More tests    => 81;
 use Encode qw(decode encode);
 
 
 BEGIN {
     use_ok 'DR::Tnt::Msgpack';
+    use_ok 'DR::Tnt::Dumper';
 }
 
 
@@ -76,3 +77,41 @@ for my $s ('привет', 'медвед') {
     is msgpack($s), pack('Ca*', (0xA0 | length $u), $u), "pack utf8 string '$s'";
     is length(msgpack $s), 1 + length $u, "msgpack's length";
 }
+
+
+for ([], [0], [0,0], [(0) x 0xF]) {
+    my $len = @$_;
+    is msgpack($_), pack("CC$len", 0x90|$len, (0)x$len), "fixarray $len";
+}
+for ([(0) x 0x10], [(0) x 0xFFFF]) {
+    my $len = @$_;
+    is msgpack($_), pack("CS>C$len", 0xDC, $len, (0)x$len), "array16 $len";
+}
+for ([(1) x 0x1000F]) {
+    my $len = @$_;
+    is msgpack($_), pack("CL>C$len", 0xDD, $len, (1)x$len), "array32 $len";
+}
+
+for my $h ({}, { map { ($_ => $_) } 1 .. 0xF }) {
+    my $len = keys %$h;
+
+    is  msgpack($h),
+        pack("CC@{[ 2 * $len ]}",
+            0x80|$len,
+            map { ($_, $_) } keys %$h
+        ),
+        "Fix hash $len";
+}
+
+for my $h ({ map { ($_ => $_) } 1 .. 0x1F }) {
+    my $len = keys %$h;
+
+    is  msgpack($h),
+        pack("CS>C@{[ 2 * $len ]}",
+            0xDE,
+            $len,
+            map { ($_, $_) } keys %$h
+        ),
+        "hash16 $len";
+}
+

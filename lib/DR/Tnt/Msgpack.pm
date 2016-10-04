@@ -7,7 +7,47 @@ use base qw(Exporter);
 our @EXPORT = qw(msgpack msgunpack msgunpack_check msgunpack_utf8);
 use Scalar::Util ();
 use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 use feature 'state';
+use DR::Tnt::Msgpack::Types ':all';
+
+sub _retstr($$) {
+    my ($str, $utf8) = @_;
+    utf8::decode $str if $utf8;
+    return $str;
+}
+
+sub _msgunpack($$);
+sub _extract_hash_elements($$$$) {
+    my ($str, $len, $size, $utf8) = @_;
+
+    my %o;
+    for (my $i = 0; $i < $size; $i++) {
+        my ($k, $klen) = _msgunpack(substr($str, $len), $utf8);
+        return unless defined $klen;
+        $len += $klen;
+
+        my ($v, $vlen) = _msgunpack(substr($str, $len), $utf8);
+        return unless defined $vlen;
+        $len += $vlen;
+
+        $o{$k} = $v;
+    }
+    return \%o, $len;
+}
+
+sub _extract_array_elements($$$$) {
+    my ($str, $len, $size, $utf8) = @_;
+
+    my @o;
+    for (my $i = 0; $i < $size; $i++) {
+        my ($e, $elen) = _msgunpack(substr($str, $len), $utf8);
+        return unless defined $elen;
+        $len += $elen;
+        push @o => $e;
+    }
+    return \@o, $len;
+}
 
 
 sub _msgunpack($$) {
@@ -17,12 +57,32 @@ sub _msgunpack($$) {
 
     my $tag = unpack 'C', $str;
 
-    # NULL
-    return (undef, 1) if $tag == 0xC0;
     # fix uint
     return ($tag, 1) if $tag <= 0x7F;
+    
     # fix negative
     return (unpack('c', $str), 1) if $tag >= 0xE0;
+
+    # fix str
+    if (($tag & ~0x1F) == 0xA0) {
+        my $len = $tag & 0x1F;
+        return unless length($str) >= 1 + $len;
+        return '', 1 unless $len;
+        return (_retstr(unpack("x[C]a$len", $str), $utf8), 1 + $len);
+    }
+
+    # fix map
+    if (($tag & ~0x0F) == 0x80) {
+        my $size = $tag & 0x0F;
+        return _extract_hash_elements($str, 1, $size, $utf8);
+    }
+
+    # fix array
+    if (($tag & ~0x0F) == 0x90) {
+        my $size = $tag & 0x0F;
+        return _extract_array_elements($str, 1, $size, $utf8);
+    }
+
 
     state $variant = {
         (0xD0)      => sub {        # int8
@@ -47,8 +107,6 @@ sub _msgunpack($$) {
         },
 
 
-
-
         (0xCC)      => sub {        # uint8
             my ($str) = @_;
             return unless length($str) >= 2;
@@ -70,13 +128,110 @@ sub _msgunpack($$) {
             return (unpack('x[C]Q>', $str), 9); 
         },
 
+        (0xC0)      => sub {        # null
+            return (undef, 1);
+        },
+
+        (0xC2)      => sub {
+            return (mp_false, 1);          # false
+        },
+        (0xC3)      => sub {
+            return (mp_true, 1);          # true
+        },
+
+        (0xC4)      => sub {        # bin8
+            my ($str) = @_;
+            return unless length($str) >= 2;
+            my $len = unpack('x[C]C', $str);
+            return unless length($str) >= 2 + $len;
+            return (unpack("x[C]C/a", $str), 2 + $len);
+        },
+        (0xC5)      => sub {        # bin16
+            my ($str) = @_;
+            return unless length($str) >= 3;
+            my $len = unpack('x[C]S>', $str);
+            return unless length($str) >= 3 + $len;
+            return (unpack("x[C]S>/a", $str), 3 + $len);
+        },
+        (0xC6)      => sub {        # bin32
+            my ($str) = @_;
+            return unless length($str) >= 5;
+            my $len = unpack('x[C]L>', $str);
+            return unless length($str) >= 5 + $len;
+            return (unpack("x[C]L>/a", $str), 5 + $len);
+        },
+
+
+        (0xD9)      => sub {        # str8
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 2;
+            my ($len) = unpack('x[C]C', $str);
+            return unless length($str) >= 2 + $len;
+            return (_retstr(unpack("x[C]C/a", $str), $utf8), 2 + $len);
+        },
+        (0xDA)      => sub {        # str16
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 3;
+            my $len = unpack('x[C]S>', $str);
+            return unless length($str) >= 3 + $len;
+            return (_retstr(unpack("x[C]S>/a", $str), $utf8), 3 + $len);
+        },
+
+        (0xDB)      => sub {        # str32
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 5;
+            my $len = unpack('x[C]L>', $str);
+            return unless length($str) >= 5 + $len;
+            return (_retstr(unpack("x[C]L>/a", $str), $utf8), 5 + $len);
+        },
+
+
+        (0xDC)      => sub {        #array16
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 3;
+            my $size = unpack('x[C]S>', $str);
+            return _extract_array_elements($str, 3, $size, $utf8);
+        },
+        (0xDD)      => sub {        #array32
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 5;
+            my $size = unpack('x[C]L>', $str);
+            return _extract_array_elements($str, 5, $size, $utf8);
+        },
+        
+        (0xDE)      => sub {        #map16
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 3;
+            my $size = unpack('x[C]S>', $str);
+            return _extract_hash_elements($str, 3, $size, $utf8);
+        },
+        (0xDF)      => sub {        #map32
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 5;
+            my $size = unpack('x[C]L>', $str);
+            return _extract_hash_elements($str, 5, $size, $utf8);
+        },
+
+        (0xCA)      => sub {    # float32
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 5;
+            return (unpack('x[C]f>', $str), 5);
+        },
+        (0xCB)      => sub {    # float64
+            my ($str, $utf8) = @_;
+            return unless length($str) >= 9;
+            return (unpack('x[C]d>', $str), 9);
+        },
     };
 
     return $variant->{$tag}($str, $utf8) if exists $variant->{$tag};
   
 
-    warn $tag;
+    warn sprintf "%02X", $tag;
     return;
+
+
+
 
 }
 
@@ -100,11 +255,55 @@ sub msgunpack_check($) {
     return $len // 0;
 }
 
+sub msgunpack_safely($) {
+    goto \&_msgunpack;
+}
+
+sub msgpack($);
 sub msgpack($) {
     my ($v) = @_;
 
     if (ref $v) {
+        if ('ARRAY' eq ref $v) {
+            my $size = @$v;
+            my $res;
 
+            if ($size <= 0xF) {
+                $res = pack 'C', 0x90 | $size;
+            } elsif ($size <= 0xFFFF) {
+                $res = pack 'CS>', 0xDC, $size;
+            } else {
+                $res = pack 'CL>', 0xDD, $size;
+            }
+
+            $res .= msgpack($_) for @$v;
+            return $res;
+
+        } elsif ('HASH' eq ref $v) {
+            my $size = scalar keys %$v;
+            
+            my $res;
+
+            if ($size <= 0xF) {
+                $res = pack 'C', 0x80 | $size;
+            } elsif ($size <= 0xFFFF) {
+                $res = pack 'CS>', 0xDE, $size;
+            } else {
+                $res = pack 'CL>', 0xDF, $size;
+            }
+
+            while (my ($k, $v) = each %$v) {
+                $res .= msgpack($k);
+                $res .= msgpack($v);
+            }
+            return $res;
+
+        } elsif (Scalar::Util::blessed $v) {
+            return $v->TO_MSGPACK if $v->can('TO_MSGPACK');
+            croak "Can't msgpack blessed value " . ref $v;
+        } else {
+            croak "Can't msgpack value " . ref $v;
+        }
     } else {
         # numbers
         if (Scalar::Util::looks_like_number $v) {
@@ -169,5 +368,27 @@ sub msgpack($) {
         }
     }
 }
+
+=head1 NAME
+
+DR::Tnt::Msgpack - msgpack encoder/decoder.
+
+=head1 SYNOPSIS
+
+    use DR::Tnt::Msgpack;
+    use DR::Tnt::Msgpack::Types ':all';  # mp_*
+
+    
+    my $blob = msgpack { a => 'b', c => 123, d => [ 3, 4, 5 ] };
+    my $object = msgunpack $blob;
+    my ($object, $len) = msgunpack_safely $blob;
+    my ($object, $len) = msgunpack_safely_utf8 $blob;
+
+    if (defined $len) {
+        substr $blob, 0, $len, '';
+        ...
+    }
+
+=cut
 
 1;
