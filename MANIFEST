@@ -36,6 +36,9 @@ t/010-comon/msgpack/030-types.t
 t/020-proto/010-tnt-proto.t
 t/020-proto/020-connect.t
 t/020-proto/lua/server.lua
+t/025-tnt-specific/010-ll-async-schema-collision.t
+t/025-tnt-specific/020-ll-sync-schema-collision.t
+t/025-tnt-specific/lua/easy.lua
 t/030-low-level/010-sync.t
 t/030-low-level/015-sync-errors.t
 t/030-low-level/020-ae.t

@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 52;
+use Test::More tests    => 41;
 use Encode qw(decode encode);
 
 
@@ -92,25 +92,3 @@ for ('first auth', 'second auth') {
     });
 }
 
-note 'schema collision';
-$c->send_request(call_lua => 1, 'lua_ping', sub {
-    my ($code, $message, $sync) = @_;
-    is $code, 'OK', 'ping was send';
-    is $c->connector->state, 'ready', 'state';
-    isnt $sync, 1, 'next_sync';
-    ok exists $c->connector->_active_sync->{$sync}, 'active sync';
-    
-    $c->wait_response($sync, sub {
-        my ($code, $message, $resp) = @_;
-        is $code => 'OK', 'ping response';
-
-        isa_ok $resp => 'HASH';
-        is $resp->{SYNC}, $sync, 'sync';
-       
-        diag explain $resp unless
-            ok $resp->{CODE} & 0x8000 , 'code (schema error)';
-        like $resp->{ERROR}, qr{Wrong schema version}, 'error text';
-        like $resp->{SCHEMA_ID}, qr{^\d+$}, 'schema_id';
-        isnt $resp->{SCHEMA_ID}, 7000, 'schema id';
-    });
-});
