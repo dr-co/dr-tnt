@@ -1,0 +1,5 @@
+libdr-tnt-perl (0.04) UNRELEASED; urgency=medium
+
+  * First Debian package release.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Mon, 10 Oct 2016 16:09:11 +0300
