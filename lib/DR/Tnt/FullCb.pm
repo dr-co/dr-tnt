@@ -234,9 +234,9 @@ sub _invalid_schema {
 
     init:
     pause:
-    schema:
         confess "Internal error: _invalid_schema in state " . $self->state;
 
+    schema:
     connecting:
     ready:
         $self->_set_state('schema');
@@ -254,15 +254,25 @@ sub _invalid_schema {
             $self->_reconnector->ll->wait_response($sync, sub {
                 my ($state, $message, $resp) = @_;
                 unless ($state eq 'OK') {
-                        warn $message;
                     $self->_set_last_error([ $state, $message ]);
                     $self->_set_state('pause');
                     $cb->($state => $message);
                     return;
                 }
+                
 
-                $self->_spaces($resp->{DATA});
-                # TODO: $resp->{CODE}
+                # have no permissions
+                if ($resp->{CODE} == 0x8037) {
+                    $self->_spaces([]);
+                } elsif ($resp->{CODE}) {
+                    $self->_set_last_error([ ER_REQUEST =>
+                        'Can not load tarantool schema', $resp->{CODE} ]);
+                    $self->_set_state('pause');
+                    $cb->(@{ $self->last_error });
+                    return;
+                } else {
+                    $self->_spaces($resp->{DATA});
+                }
 
                 $self->_log(debug => 'Loading indexes');
                 $self->_reconnector->ll->send_request(select =>
@@ -276,7 +286,7 @@ sub _invalid_schema {
                         return;
                     }
 
-                    # TODO: $resp->{CODE}
+
                     $self->_reconnector->ll->wait_response($sync, sub {
                         my ($state, $message, $resp) = @_;
                         unless ($state eq 'OK') {
@@ -285,7 +295,24 @@ sub _invalid_schema {
                             $cb->($state => $message);
                             return;
                         }
-                        $self->_indexes($resp->{DATA});
+                    
+                        if ($resp->{CODE} == 0x8037) {
+                            $self->_indexes([]);
+                        } elsif ($resp->{CODE} == 0x806D) {
+                            # collision again!
+                            $self->_invalid_schema($cb);
+                            return;
+                        
+                        } elsif ($resp->{CODE}) {
+                            $self->_set_last_error([ ER_REQUEST =>
+                                'Can not load tarantool schema', $resp->{CODE} ]);
+                            $self->_set_state('pause');
+                            $cb->(@{ $self->last_error });
+                            return;
+
+                        } else {
+                            $self->_indexes($resp->{DATA});
+                        }
 
                         $self->_set_schema($resp->{SCHEMA_ID});
                         $self->_set_state('ready');
@@ -298,7 +325,6 @@ sub _invalid_schema {
                 });
             });
         });
-
 }
 
 sub _set_schema {
