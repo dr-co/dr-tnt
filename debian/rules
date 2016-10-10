@@ -28,7 +28,7 @@ tarball:
 		--exclude=debian \
 		--exclude=.git \
 		--transform='s,^\.,libdr-tnt-perl_$(DEBVERSION),S' \
-		-czf libdr-tnt-perl_$(DEBVERSION).orig.tar.gz \
+		-cJf libdr-tnt-perl_$(DEBVERSION).orig.tar.xz \
 		`basename $(CURDIR)`
 
 
