@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 10;
+use Test::More tests    => 11;
 use Encode qw(decode encode);
 
 
@@ -54,6 +54,8 @@ for (+note 'easy connect') {
 
     $c->request(ping => sub {
         is $_[0] => 'OK', 'ping';
+
+        isnt scalar(keys %{ $c->_sch }), 0, 'sch is not empty';
     });
 
 }

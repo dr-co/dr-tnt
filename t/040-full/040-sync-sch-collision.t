@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 19;
+use Test::More tests    => 20;
 use Encode qw(decode encode);
 
 
@@ -94,6 +94,11 @@ for (+note 'lua_dir is present') {
 
     $c->request(select => '_spacei1', 'primary', 280, sub {
         is $_[0], 'ER_NOSPACE', 'status';
+    });
+
+
+    $c->request('select', '_vspace', 'primary', 281, sub {
+        is $_[0], 'OK', 'status';
     });
 }
 

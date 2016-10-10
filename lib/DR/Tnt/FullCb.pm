@@ -15,6 +15,11 @@ use Scalar::Util;
 use feature 'state';
 
 
+use constant SPACE_space        => 281;     # _vspace
+use constant SPACE_index        => 289;     # _vindex
+use constant ER_TNT_PERMISSIONS => 0x8037;
+use constant ER_TNT_SCHEMA      => 0x806D;
+
 use Mouse::Util::TypeConstraints;
 
     enum DriverType     => [ 'sync', 'async' ];
@@ -241,7 +246,7 @@ sub _invalid_schema {
     ready:
         $self->_set_state('schema');
         $self->_reconnector->ll->send_request(select =>
-                                undef, 280, 0, [], undef, undef, 'ALL', sub {
+                                undef, SPACE_space, 0, [], undef, undef, 'ALL', sub {
             my ($state, $message, $sync) = @_;
             $self->_log(debug => 'Loading spaces');
             unless ($state eq 'OK') {
@@ -262,7 +267,7 @@ sub _invalid_schema {
                 
 
                 # have no permissions
-                if ($resp->{CODE} == 0x8037) {
+                if ($resp->{CODE} == ER_TNT_PERMISSIONS) {
                     $self->_spaces([]);
                 } elsif ($resp->{CODE}) {
                     $self->_set_last_error([ ER_REQUEST =>
@@ -276,7 +281,7 @@ sub _invalid_schema {
 
                 $self->_log(debug => 'Loading indexes');
                 $self->_reconnector->ll->send_request(select =>
-                    $resp->{SCHEMA_ID}, 288, 0, [], undef, undef, 'ALL', sub { 
+                    $resp->{SCHEMA_ID}, SPACE_index, 0, [], undef, undef, 'ALL', sub { 
 
                     my ($state, $message, $sync) = @_;
                     unless ($state eq 'OK') {
@@ -296,9 +301,9 @@ sub _invalid_schema {
                             return;
                         }
                     
-                        if ($resp->{CODE} == 0x8037) {
+                        if ($resp->{CODE} == ER_TNT_PERMISSIONS) {
                             $self->_indexes([]);
-                        } elsif ($resp->{CODE} == 0x806D) {
+                        } elsif ($resp->{CODE} == ER_TNT_SCHEMA) {
                             # collision again!
                             $self->_invalid_schema($cb);
                             return;
@@ -527,7 +532,7 @@ sub request {
             }
 
             # schema collision
-            if ($resp->{CODE} == 0x806D) {
+            if ($resp->{CODE} == ER_TNT_SCHEMA) {
                 $self->_log(error => 'Detected schema collision');
                 $self->_log(info => 'Defer request "%s" until schema loaded', $name);
                 push @{ $self->_wait_ready } => $request;

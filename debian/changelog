@@ -1,5 +1,5 @@
-libdr-tnt-perl (0.05-1) UNRELEASED; urgency=medium
+libdr-tnt-perl (0.06-1) UNRELEASED; urgency=medium
 
   * First Debian package release.
 
- -- Dmitry E. Oboukhov <unera@debian.org>  Mon, 10 Oct 2016 19:48:42 +0300
+ -- Dmitry E. Oboukhov <unera@debian.org>  Mon, 10 Oct 2016 20:06:55 +0300
