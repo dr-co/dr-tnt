@@ -52,7 +52,8 @@ sub tarantool_version_check($) {
 
     FAIL: {
         my $tb = Test::More->builder; 
-        for (my $i = $tb->{Curr_Test}; $i < $tb->expected_tests; $i++) {
+        my @passed = $tb->details;
+        for (my $i = @passed; $i < $tb->expected_tests; $i++) {
             $tb->skip("tarantool $version is not found");
         }
         exit;
