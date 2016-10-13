@@ -12,8 +12,9 @@ use POSIX;
 sub new {
     my ($class, %opts) = @_;
 
-    die "-lua options is not defined" unless $opts{-lua};
-    $opts{-lua} = rel2abs $opts{-lua};
+    die "-lua or -make_lua option is not defined"
+        unless $opts{-lua} or $opts{-make_lua};
+    $opts{-lua} = rel2abs $opts{-lua} if $opts{-lua};
     my $self = bless \%opts => ref($class) || $class;
 
 
@@ -56,11 +57,22 @@ sub start {
 
         return $self;
     }
+    
+    for (open my $fh, '>>', $self->{-log}) {
+        POSIX::dup2(fileno($fh), fileno(STDOUT));
+        POSIX::dup2(fileno($fh), fileno(STDERR));
+        close $fh;
+    }
 
-    open my $fh, '>>', $self->{-log};
-    POSIX::dup2(fileno($fh), fileno(STDOUT));
-    POSIX::dup2(fileno($fh), fileno(STDERR));
-    close $fh;
+    unless ($self->{-lua}) {
+        $self->{-lua} = catfile $self->{-dir}, 'make_lua.lua';
+        open my $fh, '>:raw', $self->{-lua}
+            or warn "Can't create $self->{-lua}: $!\n";
+        my $lua = $self->{-make_lua};
+        utf8::encode $lua if utf8::is_utf8 $lua;
+        print $fh $lua;
+        close $fh;
+    }
 
     chdir $self->{-dir};
     if ($self->port) {

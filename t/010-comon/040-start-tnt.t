@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 4;
+use Test::More tests    => 6;
 use Encode qw(decode encode);
 
 
@@ -22,6 +22,21 @@ BEGIN {
     tarantool_version_check(1.6);
 }
 
-my $t = start_tarantool -lua => 't/010-comon/lua/run-test.lua';
-isa_ok $t => DR::Tnt::Test::TntInstance::;
-like $t->log, qr{Hello, world}, 'logfile';
+for (+note 'lua') {
+    my $t = start_tarantool -lua => 't/010-comon/lua/run-test.lua';
+    isa_ok $t => DR::Tnt::Test::TntInstance::;
+    like $t->log, qr{Hello, world}, 'logfile';
+}
+
+for (+note 'make_lua') {
+    local $/;
+    my $lua = <DATA>;
+    my $t = start_tarantool -make_lua => $lua;
+    isa_ok $t => DR::Tnt::Test::TntInstance::;
+    like $t->log, qr{Hello, world, -make_lua}, 'logfile';
+}
+
+__DATA__
+
+print('Hello, world, -make_lua')
+os.exit();
