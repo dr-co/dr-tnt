@@ -62,6 +62,7 @@ t/040-full/lua/easy.lua
 t/040-full/lua/start/00-test.lua
 t/100-connector/010-coro/010-base.t
 t/100-connector/010-coro/020-utf8.t
+t/100-connector/010-coro/030-parallel.t
 t/100-connector/020-sync/010-base.t
 t/100-connector/020-sync/020-utf8.t
 t/100-connector/030-ae/010-base.t
