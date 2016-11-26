@@ -108,7 +108,6 @@ sub restart {
             unless ($state eq 'OK') {
                 $self->_set_last_error([ $state, $message ]);
                 $self->_set_state('pause');
-                $cb->($state => $message);
                 return;
             }
 
@@ -117,7 +116,6 @@ sub restart {
                 unless ($state eq 'OK') {
                     $self->_set_last_error([ $state, $message ]);
                     $self->_set_state('pause');
-                    $cb->($state => $message);
                     return;
                 }
 
@@ -130,7 +128,6 @@ sub restart {
                     unless ($state eq 'OK') {
                         $self->_set_last_error([ $state, $message ]);
                         $self->_set_state('pause');
-                        $cb->($state => $message);
                         return;
                     }
 
@@ -139,16 +136,15 @@ sub restart {
                         unless ($state eq 'OK') {
                             $self->_set_last_error([ $state, $message ]);
                             $self->_set_state('pause');
-                            $cb->($state => $message);
                             return;
                         }
 
                         unless ($resp->{CODE} == 0) {
+                            $self->_log(warning => 'Can not auth: Wrong login or password');
                             $self->_set_last_error([ ER_BROKEN_PASSWORD =>
                                 $resp->{ERROR} // 'Wrong password']
                             );
                             $self->_set_state('pause');
-                            $cb->(@{ $self->last_error });
                             return;
                         }
                         $self->_preeval_lua($cb);

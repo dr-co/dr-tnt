@@ -39,9 +39,7 @@ sub event {
     }
 }
 
-sub check_pause {
-
-}
+sub check_pause {}
 
 has ll  =>
     is          => 'ro',
