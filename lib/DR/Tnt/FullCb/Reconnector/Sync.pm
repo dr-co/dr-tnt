@@ -25,6 +25,14 @@ sub event {
     }
 }
 
+sub _restart {
+    my ($self, $cb, $cbc) = @_;
+
+    $cb->();
+    while ($cbc->()) {
+        $cb->();
+    }
+}
 
 sub check_pause {
     my ($self) = @_;
@@ -32,10 +40,8 @@ sub check_pause {
     return unless defined $self->fcb->reconnect_interval;
     my $now = Time::HiRes::time;
     my $pause = $self->fcb->reconnect_interval - ($now - $self->pause_started);
-
     Time::HiRes::sleep $pause if $pause > 0;
-    return unless $self->fcb;
-    $self->fcb->restart;
+    $self->_set_pause_started(Time::HiRes::time);
 }
 
 has ll  =>

@@ -118,7 +118,7 @@ sub next_sync {
 sub connect {
     my ($self, $cb) = @_;
 
-    if (any { $_ eq $self->state } 'init', 'error') {
+    if (any { $_ eq $self->state } 'init', 'error', 'ready') {
         $self->_clean_fh;
         $self->state('connecting');
         $self->_connect(sub {

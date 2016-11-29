@@ -14,7 +14,6 @@ with 'DR::Tnt::Role::Logging';
 use Scalar::Util;
 use feature 'state';
 
-
 use constant SPACE_space        => 281;     # _vspace
 use constant SPACE_index        => 289;     # _vindex
 use constant ER_TNT_PERMISSIONS => 0x8037;
@@ -53,11 +52,16 @@ has state =>
     writer      => '_set_state',
     trigger     => sub {
         my ($self, undef, $old_state) = @_;
+        $self->_state_changed($self->_now);
 
         $self->_reconnector->event($self->state, $old_state);
         $self->_log(info => 'Connector is in state: %s',  $self->state);
     };
 ;
+
+has _state_changed  => is => 'rw', isa => 'Maybe[Num]';
+
+
 has last_schema =>
     is      => 'ro',
     isa     => 'Int',
@@ -87,72 +91,6 @@ has _reconnector    =>
 ;
 
 
-sub restart {
-    my ($self, $cb) = @_;
-
-
-    $cb ||= sub {  };
-    $self->_log(info => 'Starting connection to %s:%s (driver: %s)',
-        $self->host, $self->port, $self->driver);
-
-    goto $self->state;
-    
-    init:
-    connecting:
-    schema:
-    pause:
-    ready:
-        $self->_set_state('connecting');
-        $self->_reconnector->ll->connect(sub {
-            my ($state, $message) = @_;
-            unless ($state eq 'OK') {
-                $self->_set_last_error([ $state, $message ]);
-                $self->_set_state('pause');
-                return;
-            }
-
-            $self->_reconnector->ll->handshake(sub {
-                my ($state, $message) = @_;
-                unless ($state eq 'OK') {
-                    $self->_set_last_error([ $state, $message ]);
-                    $self->_set_state('pause');
-                    return;
-                }
-
-                unless ($self->user and $self->password) {
-                    return $self->_preeval_lua($cb);
-                }
-
-                $self->_reconnector->ll->send_request(auth => undef, sub {
-                    my ($state, $message, $sync) = @_;
-                    unless ($state eq 'OK') {
-                        $self->_set_last_error([ $state, $message ]);
-                        $self->_set_state('pause');
-                        return;
-                    }
-
-                    $self->_reconnector->ll->wait_response($sync, sub {
-                        my ($state, $message, $resp) = @_;
-                        unless ($state eq 'OK') {
-                            $self->_set_last_error([ $state, $message ]);
-                            $self->_set_state('pause');
-                            return;
-                        }
-
-                        unless ($resp->{CODE} == 0) {
-                            $self->_log(warning => 'Can not auth: Wrong login or password');
-                            $self->_set_last_error([ ER_BROKEN_PASSWORD =>
-                                $resp->{ERROR} // 'Wrong password']
-                            );
-                            $self->_set_state('pause');
-                            return;
-                        }
-                        $self->_preeval_lua($cb);
-                    });
-                });
-            });
-        });
-}
 
 has _unsent_lua     => is => 'rw', isa => 'ArrayRef', default => sub {[]};
 
@@ -180,7 +118,7 @@ sub _preeval_unsent_lua {
 
     my $lua = shift @{ $self->_unsent_lua };
 
-    $self->_log(debug => 'Eval "%s" after connection', $lua); 
+    $self->_log(debug => 'Eval "%s" after connection', $lua);
 
     if (open my $fh, '<:raw', $lua) {
         local $/;
@@ -260,7 +198,7 @@ sub _invalid_schema {
                     $cb->($state => $message);
                     return;
                 }
-                
+
 
                 # have no permissions
                 if ($resp->{CODE} == ER_TNT_PERMISSIONS) {
@@ -277,7 +215,7 @@ sub _invalid_schema {
 
                 $self->_log(debug => 'Loading indexes');
                 $self->_reconnector->ll->send_request(select =>
-                    $resp->{SCHEMA_ID}, SPACE_index, 0, [], undef, undef, 'ALL', sub { 
+                    $resp->{SCHEMA_ID}, SPACE_index, 0, [], undef, undef, 'ALL', sub {
 
                     my ($state, $message, $sync) = @_;
                     unless ($state eq 'OK') {
@@ -296,14 +234,14 @@ sub _invalid_schema {
                             $cb->($state => $message);
                             return;
                         }
-                    
+
                         if ($resp->{CODE} == ER_TNT_PERMISSIONS) {
                             $self->_indexes([]);
                         } elsif ($resp->{CODE} == ER_TNT_SCHEMA) {
                             # collision again!
                             $self->_invalid_schema($cb);
                             return;
-                        
+
                         } elsif ($resp->{CODE}) {
                             $self->_set_last_error([ ER_REQUEST =>
                                 'Can not load tarantool schema', $resp->{CODE} ]);
@@ -346,7 +284,7 @@ sub _set_schema {
         for (@{ $self->_indexes }) {
             next unless $_->[0] == $space->{id};
 
-            $space->{indexes}{ $_->[2] } = 
+            $space->{indexes}{ $_->[2] } =
             $space->{indexes}{ $_->[1] } = {
                 id      => $_->[1],
                 name    => $_->[2],
@@ -358,7 +296,7 @@ sub _set_schema {
             }
         }
     }
-     
+
     $self->_set_last_schema($schema_id);
     $self->_sch(\%sch);
     $self->_indexes([]);
@@ -404,21 +342,281 @@ sub _tuples {
     $cb->(OK => 'Response received', $res);
 }
 
+sub restart {
+    my ($self, $cbc) = @_;
+
+    $cbc ||= sub {  };
+
+    $self->_log(info => 'Starting connection to %s:%s (driver: %s)',
+        $self->host, $self->port, $self->driver);
+
+    goto $self->state;
+
+    init:
+    connecting:
+    schema:
+    pause:
+    ready:
+        $self->_set_state('connecting');
+        $self->_reconnector->ll->connect(sub {
+            my ($state, $message) = @_;
+            unless ($state eq 'OK') {
+                $self->_set_last_error([ $state, $message ]);
+                $self->_set_state('pause');
+                $cbc->(@{ $self->last_error });
+                return;
+            }
+
+            $self->_reconnector->ll->handshake(sub {
+                my ($state, $message) = @_;
+                unless ($state eq 'OK') {
+                    $self->_set_last_error([ $state, $message ]);
+                    $self->_set_state('pause');
+                    $cbc->(@{ $self->last_error });
+                    return;
+                }
+
+                unless ($self->user and $self->password) {
+                    return $self->_preeval_lua($cbc);
+                }
+
+                $self->_reconnector->ll->send_request(auth => undef, sub {
+                    my ($state, $message, $sync) = @_;
+                    unless ($state eq 'OK') {
+                        $self->_set_last_error([ $state, $message ]);
+                        $self->_set_state('pause');
+                        $cbc->(@{ $self->last_error });
+                        return;
+                    }
+
+                    $self->_reconnector->ll->wait_response($sync, sub {
+                        my ($state, $message, $resp) = @_;
+                        unless ($state eq 'OK') {
+                            $self->_set_last_error([ $state, $message ]);
+                            $self->_set_state('pause');
+                            $cbc->(@{ $self->last_error });
+                            return;
+                        }
+
+                        unless ($resp->{CODE} == 0) {
+                            $self->_log(warning => 'Can not auth: Wrong login or password');
+                            $self->_set_last_error([ ER_BROKEN_PASSWORD =>
+                                $resp->{ERROR} // 'Wrong password']
+                            );
+                            $self->_set_state('pause');
+                            $cbc->(@{ $self->last_error });
+                            return;
+                        }
+                        $self->_preeval_lua($cbc);
+                    });
+                });
+            });
+        });
+}
+
 sub request {
+    my $self = shift;
+    push @{ $self->_wait_ready } => \@_;
+
+
+    restart:
+        goto $self->state;
+
+
+    init:
+        $self->_log(info => 'Autoconnect before first request');
+    reinit:
+        $self->restart(sub {
+            return if $self->state eq 'ready';
+
+            unless (defined $self->reconnect_interval) {
+                my $list = $self->_wait_ready;
+                $self->_wait_ready([]);
+                for (@$list) {
+                    $_->[-1](@{ $self->last_error });
+                }
+                return;
+            }
+        });
+
+        if ($self->driver eq 'sync') {
+            goto ready if $self->state eq 'ready';
+            goto sync_redo_check;
+        }
+
+        return;
+    
+    sync_redo_check:
+        goto no_reconnect_errors unless defined $self->reconnect_interval;
+        Time::HiRes::sleep($self->reconnect_interval);
+        goto reinit;
+
+    schema:
+    connecting:
+        return;
+
+    pause:
+        if ($self->driver eq 'sync') {
+            goto no_reconnect_errors unless defined $self->reconnect_interval;
+            my $pause = $self->reconnect_interval -
+                ($self->_now - $self->_state_changed);
+            Time::HiRes::sleep($pause) if $pause > 0;
+            goto reinit;
+        }
+        goto no_reconnect_errors unless defined $self->reconnect_interval;
+        return;
+    no_reconnect_errors: {
+            my $list = $self->_wait_ready;
+            $self->_wait_ready([]);
+            for (@$list) {
+                $_->[-1](@{ $self->last_error });
+            }
+            return
+    }
+
+    ready:
+        while (my $request = shift @{ $self->_wait_ready }) {
+
+            unless ($self->state eq 'ready') {
+                unshift @{ $self->_wait_ready  } => $request;
+                goto restart;
+            };
+
+            my @args = @$request;
+            my $name = shift @args;
+            my $cb = pop @args;
+
+            my ($space, $index);
+            state $space_pos = {
+                select      => 'index',
+                update      => 'normal',
+                insert      => 'normal',
+                replace     => 'normal',
+                delete      => 'normal',
+                call_lua    => 'mayberef',
+                eval_lua    => 'mayberef',
+                ping        => 'none',
+                auth        => 'none',
+            };
+
+            croak "unknown method $name" unless exists $space_pos->{$name};
+
+            goto $space_pos->{$name};
+
+            index:
+                $space = $args[0];
+                unless (exists $self->_sch->{ $space }) {
+                    $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+                    $cb->(@{ $self->last_error });
+                    next;
+                }
+                $args[0] = $self->_sch->{ $space }{id};
+
+                $index = $args[1];
+                unless (exists $self->_sch->{ $space }{indexes}{ $index }) {
+                    $self->_set_last_error(
+                        [ER_NOINDEX => "Index space[$space].$index not found"]
+                    );
+                    $cb->(@{ $self->last_error });
+                    next;
+                }
+
+                $index = $args[1] = $self->_sch->{$space}{indexes}{ $index }{id};
+                goto do_request;
+
+            normal:
+                $space = $args[0];
+                unless (exists $self->_sch->{ $space }) {
+                    $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+                    $cb->(@{ $self->last_error });
+                    next;
+                }
+                $space = $args[0] = $self->_sch->{ $space }{id};
+                goto do_request;
+
+            mayberef:
+                if ('ARRAY' eq ref $args[0]) {
+                    ($args[0], $space) = @{ $args[0] };
+                }
+                goto do_request unless defined $space;
+                unless (exists $self->_sch->{ $space }) {
+                    $self->_set_last_error([ER_NOSPACE => "Space $space not found"]);
+                    $cb->(@{ $self->last_error });
+                    next;
+                }
+                $space = $self->_sch->{ $space }{id};
+
+
+            none:
+
+            do_request:
+
+            $self->_reconnector->ll->send_request($name, $self->last_schema, @args, sub {
+                my ($state, $message, $sync) = @_;
+                unless ($state eq 'OK') {
+                    $self->_set_last_error([ $state => $message ]);
+                    $self->_set_state('pause');
+                    $cb->(@{ $self->last_error });
+                    return;
+                }
+
+                $self->_reconnector->ll->wait_response($sync, sub {
+                    my ($state, $message, $resp) = @_;
+                    unless ($state eq 'OK') {
+                        $self->_set_last_error([ $state => $message ]);
+                        $self->_set_state('pause');
+                        $cb->(@{ $self->last_error });
+                        return;
+                    }
+
+                    # schema collision
+                    if ($resp->{CODE} == ER_TNT_SCHEMA) {
+                        $self->_log(error => 'Detected schema collision');
+                        $self->_log(info => 'Defer request "%s" until schema loaded', $name);
+                        push @{ $self->_wait_ready } => $request;
+                        $self->_invalid_schema(sub {}) if $self->state eq 'ready';
+                        return;
+                    }
+
+                    unless ($resp->{CODE} == 0) {
+                        $self->_set_last_error(
+                            [ ER_REQUEST => $resp->{ERROR}, $resp->{CODE} ]
+                        );
+                        $cb->(@{ $self->last_error });
+                        return;
+                    }
+                    $self->_set_last_error(undef);
+                    $self->_tuples($resp, $space, $cb);
+                });
+            });
+    }
+    return;
+
+}
+
+sub request_old {
     my $cb = pop;
     my ($self, $name, @args) = @_;
 
     my $request = [ $name, @args, $cb ];
-   
+
     # all states waits ready
     goto $self->state;
 
     init:
         $self->_log(info => 'Defer request "%s" until first connected', $name);
         push @{ $self->_wait_ready } => $request;
-        
+
         $self->_log(info => 'Autoconnect before first request');
-        $self->restart;
+        $self->restart(sub {
+            if ($self->state eq 'ready') {
+                $self->request($name, @args, $cb);
+            } else {
+                unless (defined $self->reconnect_interval) {
+                    $cb->(@{ $self->last_error });
+                }
+            }
+        });
         return;
 
     schema:
@@ -435,7 +633,6 @@ sub request {
 
         $self->_log(info => 'Defer request "%s" until reconnected', $name);
         push @{ $self->_wait_ready } => $request;
-        $self->_reconnector->check_pause;
         return;
 
     ready:
@@ -469,7 +666,7 @@ sub request {
             return;
         }
         $args[0] = $self->_sch->{ $space }{id};
-        
+
         $index = $args[1];
         unless (exists $self->_sch->{ $space }{indexes}{ $index }) {
             $self->_set_last_error(
@@ -549,5 +746,20 @@ sub request {
     });
 }
 
+
+sub _now {
+    my ($self) = @_;
+    return Time::HiRes::time() if $self->driver eq 'sync';
+    return AnyEvent::now();
+}
+
+sub BUILD {
+    my ($self) = @_;
+    if ($self->driver eq 'sync') {
+        require Time::HiRes;
+    } else {
+        require AnyEvent;
+    }
+}
 __PACKAGE__->meta->make_immutable;
 

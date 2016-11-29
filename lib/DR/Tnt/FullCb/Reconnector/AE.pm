@@ -18,7 +18,11 @@ sub _tmr_cb {
         $self->timer(undef);
         return unless $self->fcb;
         return unless $self->fcb->state eq 'pause';
-        $self->fcb->restart;
+        $self->fcb->_log(info => 'Reinit connection');
+        $self->fcb->restart(sub {
+            my ($state) = @_;
+            $self->fcb->request(ping => sub {  }) if $state eq 'OK';
+        });
     }
 }
 
@@ -28,7 +32,6 @@ sub event {
 
     if ($event eq 'pause') {
         return if $self->timer;
-
         my $timer = AE::timer
                 $self->fcb->reconnect_interval,
                 0,
@@ -39,7 +42,7 @@ sub event {
     }
 }
 
-sub check_pause {}
+sub check_pause { 0 }
 
 has ll  =>
     is          => 'ro',
@@ -56,5 +59,10 @@ has ll  =>
             utf8            => $self->fcb->utf8,
         );
     };
+
+sub _restart {
+    my ($self, $cb) = @_;
+    goto \&$cb;
+}
 
 __PACKAGE__->meta->make_immutable;
