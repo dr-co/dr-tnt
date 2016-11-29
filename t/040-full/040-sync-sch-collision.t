@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 20;
+use Test::More tests    => 24;
 use Encode qw(decode encode);
 
 
@@ -78,14 +78,14 @@ for (+note 'lua_dir is present') {
         is $_[0], 'OK', 'status';
         is_deeply $_[2], [[ test => 2 ] ], 'response';
     });
- 
+
     $c->_set_last_schema($c->last_schema - 10);
 
     $c->request(select => '_space', 'primary', 280, sub {
         is $_[0], 'OK', 'status';
         is_deeply [ @{ $_[2][0] }[0,2] ], [ 280, '_space'], 'response';
     });
-   
+
     like $log, qr{Detected schema collision}, 'Detected schema collision';
 
     $c->request(select => '_space', 'primary1', 280, sub {
@@ -96,9 +96,29 @@ for (+note 'lua_dir is present') {
         is $_[0], 'ER_NOSPACE', 'status';
     });
 
-
     $c->request('select', '_vspace', 'primary', 281, sub {
         is $_[0], 'OK', 'status';
     });
+
+
+    my $schema_id = $c->last_schema;
+    $log = '';
+    $c->request(call_lua => 'box.session.storage.create_space', 'test_space', sub {
+        diag explain \@_ unless
+            is $_[0] => 'OK', 'space created';
+
+        SKIP: {
+            skip 'see https://github.com/tarantool/tarantool/issues/1959', 1;
+            isnt $c->last_schema, $schema_id, 'schema_id was changed';
+        }
+
+    });
+
+    $c->request(ping => sub {
+        diag explain \@_ unless
+            is $_[0] => 'OK', 'ping';
+        isnt $c->last_schema, $schema_id, 'schemaid was changed';
+    });
+
 }
 

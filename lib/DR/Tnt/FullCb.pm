@@ -22,7 +22,13 @@ use constant ER_TNT_SCHEMA      => 0x806D;
 use Mouse::Util::TypeConstraints;
 
     enum DriverType     => [ 'sync', 'async' ];
-    enum FullCbState    => [ 'init', 'connecting', 'schema', 'ready', 'pause' ];
+    enum FullCbState    => [
+        'init',
+        'connecting',
+        'schema',
+        'ready',
+        'pause',
+    ];
 
 no Mouse::Util::TypeConstraints;
 
@@ -256,10 +262,8 @@ sub _invalid_schema {
                         $self->_set_schema($resp->{SCHEMA_ID});
                         $self->_set_state('ready');
 
-                        my $list = $self->_wait_ready;
-                        $self->_wait_ready([]);
                         $cb->('OK', 'Connected, schema loaded');
-                        $self->request(@$_) for @$list;
+                        $self->request;
                     });
                 });
             });
@@ -416,8 +420,58 @@ sub restart {
 
 sub request {
     my $self = shift;
-    push @{ $self->_wait_ready } => \@_;
 
+    if (@_) {
+
+        unless ('CODE' eq ref $_[-1]) {
+            croak 'usage: $connector->request(..., $CALLBACK)';
+        }
+        state $check = {
+            get         => sub {
+                croak 'usage: $connector->get(space, index, key)'
+                    unless @_ == 5;
+            },
+            select      => sub {
+                croak 'usage: $connector->select(space, index, key[, limit, offset, iterator])'
+                    unless @_ >= 5 and @_ <= 8;
+            },
+            update      => sub { },
+            insert      => sub {
+                croak 'usage: $connector->insert(space, tuple)'
+                    unless @_ == 4 and 'ARRAY' eq ref $_[2];
+            },
+            replace     => sub {
+                croak 'usage: $connector->replace(space, tuple)'
+                    unless @_ == 4 and 'ARRAY' eq ref $_[2];
+            },
+            delete      => sub {
+                croak 'usage: $connector->delete(space, key)'
+                    unless @_ == 4;
+            },
+            call_lua    => sub {
+                croak 'usage: $connector->call_lua(name[, args])'
+                    unless @_ >= 3;
+            },
+            eval_lua    => sub {
+                croak 'usage: $connector->eval_lua(code[, args])'
+                    unless @_ >= 3;
+            },
+            ping        => sub {
+            },
+            auth        => sub {
+                croak 'usage: $connector->auth([user, password])'
+                    unless @_ == 3 or @_ == 5;
+            },
+        };
+
+        unless (exists $check->{ $_[0] // 'undef' }) {
+            croak 'unknown request method: ' . $_[0] // 'undef';
+        }
+
+        $check->{ $_[0] }(@_);
+
+        push @{ $self->_wait_ready } => \@_;
+    }
 
     restart:
         goto $self->state;
@@ -425,10 +479,10 @@ sub request {
 
     init:
         $self->_log(info => 'Autoconnect before first request');
+
     reinit:
         $self->restart(sub {
             return if $self->state eq 'ready';
-
             unless (defined $self->reconnect_interval) {
                 my $list = $self->_wait_ready;
                 $self->_wait_ready([]);
@@ -551,44 +605,49 @@ sub request {
 
             do_request:
 
-            $self->_reconnector->ll->send_request($name, $self->last_schema, @args, sub {
-                my ($state, $message, $sync) = @_;
-                unless ($state eq 'OK') {
-                    $self->_set_last_error([ $state => $message ]);
-                    $self->_set_state('pause');
-                    $cb->(@{ $self->last_error });
-                    return;
-                }
+                $self->_reconnector->ll->send_request($name, $self->last_schema,
+                    @args, sub {
+                        my ($state, $message, $sync) = @_;
+                        unless ($state eq 'OK') {
+                            $self->_set_last_error([ $state => $message ]);
+                            $self->_set_state('pause');
+                            $cb->(@{ $self->last_error });
+                            return;
+                        }
 
-                $self->_reconnector->ll->wait_response($sync, sub {
-                    my ($state, $message, $resp) = @_;
-                    unless ($state eq 'OK') {
-                        $self->_set_last_error([ $state => $message ]);
-                        $self->_set_state('pause');
-                        $cb->(@{ $self->last_error });
-                        return;
-                    }
+                        $self->_reconnector->ll->wait_response($sync, sub {
+                            my ($state, $message, $resp) = @_;
+                            unless ($state eq 'OK') {
+                                $self->_set_last_error([ $state => $message ]);
+                                $self->_set_state('pause');
+                                $cb->(@{ $self->last_error });
+                                return;
+                            }
 
-                    # schema collision
-                    if ($resp->{CODE} == ER_TNT_SCHEMA) {
-                        $self->_log(warning => 'Detected schema collision');
-                        $self->_log(info => 'Defer request "%s" until schema loaded', $name);
-                        push @{ $self->_wait_ready } => $request;
-                        $self->_invalid_schema(sub {}) if $self->state eq 'ready';
-                        return;
-                    }
+                            # schema collision
+                            if ($resp->{CODE} == ER_TNT_SCHEMA) {
+                                $self->_log(warning => 'Detected schema collision');
+                                $self->_log(info => 'Defer request "%s" until schema loaded', $name);
+                                unshift @{ $self->_wait_ready } => $request;
+                                $self->_invalid_schema(sub {}) if $self->state eq 'ready';
+                                return;
+                            }
 
-                    unless ($resp->{CODE} == 0) {
-                        $self->_set_last_error(
-                            [ ER_REQUEST => $resp->{ERROR}, $resp->{CODE} ]
-                        );
-                        $cb->(@{ $self->last_error });
-                        return;
-                    }
-                    $self->_set_last_error(undef);
-                    $self->_tuples($resp, $space, $cb);
-                });
-            });
+                            unless ($resp->{CODE} == 0) {
+                                $self->_set_last_error(
+                                    [ ER_REQUEST => $resp->{ERROR}, $resp->{CODE} ]
+                                );
+                                $cb->(@{ $self->last_error });
+                                return;
+                            }
+
+                            if ($resp->{SCHEMA_ID} != $self->last_schema) {
+                                $self->_log(info => 'request was changed schema id');
+                            }
+                            $self->_set_last_error(undef);
+                            $self->_tuples($resp, $space, $cb);
+                        });
+                    });
     }
     return;
 
