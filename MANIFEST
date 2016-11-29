@@ -57,9 +57,11 @@ t/040-full/040-sync-sch-collision.t
 t/040-full/045-sync-sch-noauth.t
 t/040-full/050-ae-reconnect.t
 t/040-full/060-sync-reconnect.t
+t/040-full/070-sync-wrongpassowrd.t
 t/040-full/hashify/010-ae.t
 t/040-full/lua/easy.lua
 t/040-full/lua/start/00-test.lua
+t/040-full/lua/start-pause.lua
 t/100-connector/010-coro/010-base.t
 t/100-connector/010-coro/020-utf8.t
 t/100-connector/010-coro/030-parallel.t
