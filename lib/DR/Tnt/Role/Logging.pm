@@ -5,7 +5,25 @@ use warnings;
 package DR::Tnt::Role::Logging;
 use Mouse::Role;
 
-has logger  => is => 'rw', isa => 'Maybe[CodeRef]';
+has logger  =>
+    is          => 'rw',
+    isa         => 'CodeRef',
+    default     => sub {
+        sub {
+            my ($level, $msg) = @_;
+
+            goto $level;
+
+            warning:
+            warn:
+            error:
+                warn "$level: $msg";
+                return;
+
+            info:
+            debug:
+        }
+};
 
 sub _log {
     my ($self, $level, $fmt, @arg) = @_;

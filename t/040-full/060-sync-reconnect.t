@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 25;
+use Test::More tests    => 31;
 use Encode qw(decode encode);
 
 
@@ -116,4 +116,31 @@ for (+note 'reconnect_interval is defined') {
 
         is_deeply [@{ $_[2][0] }[0,2]], [280, '_space'], 'response';
     });
+}
+
+for (+note 'Connect before server started') {
+    my $started = Time::HiRes::time;
+    my $tip = start_tarantool
+        -lua        => 't/040-full/lua/start-pause.lua';
+    isa_ok $tip => DR::Tnt::Test::TntInstance::, 'tarantool';
+
+    my $c = new DR::Tnt::FullCb
+        driver              => 'sync',
+        host                => 'localhost',
+        port                => $tip->port,
+        user                => 'testrwe',
+        password            => 'test',
+        lua_dir             => 't/040-full/lua/start',
+        logger              => \&LOGGER,
+        reconnect_interval  => .1
+    ;
+    isa_ok $c => DR::Tnt::FullCb::, 'connector created';
+
+    $c->request(ping => sub {
+        is $_[0], 'OK', 'ping done';
+    });
+    
+    like $tip->log, qr{entering the event loop}, 'tarantool was really started';
+    cmp_ok Time::HiRes::time - $started, '>=', 0.7, 'pause lo';
+    cmp_ok Time::HiRes::time - $started, '<=', 1.3, 'pause hi';
 }

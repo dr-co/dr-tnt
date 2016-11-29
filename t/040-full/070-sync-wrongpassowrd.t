@@ -74,3 +74,5 @@ for (+note 'reconnect_interval is defined') {
 
     like $@ => qr{alarm}, 'timeout reached';
 }
+
+
