@@ -6,6 +6,7 @@ use DR::Tnt::FullCb;
 package DR::Tnt::Client::AE;
 use Mouse;
 use Carp;
+use AnyEvent;
 $Carp::Internal{ (__PACKAGE__) }++;
 
 

@@ -65,10 +65,13 @@ t/040-full/lua/start-pause.lua
 t/100-connector/010-coro/010-base.t
 t/100-connector/010-coro/020-utf8.t
 t/100-connector/010-coro/030-parallel.t
+t/100-connector/010-coro/040-require.t
 t/100-connector/020-sync/010-base.t
 t/100-connector/020-sync/020-utf8.t
+t/100-connector/020-sync/030-require.t
 t/100-connector/030-ae/010-base.t
 t/100-connector/030-ae/020-utf8.t
+t/100-connector/030-ae/030-require.t
 t/100-connector/lua/easy.lua
 trash/eval.pl
 .travis.yml

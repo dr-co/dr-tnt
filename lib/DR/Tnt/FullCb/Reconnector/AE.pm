@@ -7,7 +7,7 @@ use Mouse;
 use DR::Tnt::Dumper;
 use DR::Tnt::LowLevel::Connector::AE;
 use DR::Tnt::LowLevel;
-use AE;
+use AnyEvent;
 
 has fcb     => is => 'ro', isa => 'Object', weak_ref => 1;
 has timer   => is => 'rw', isa => 'Maybe[Any]';

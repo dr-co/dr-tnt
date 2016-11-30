@@ -19,6 +19,7 @@ use constant SPACE_index        => 289;     # _vindex
 use constant ER_TNT_PERMISSIONS => 0x8037;
 use constant ER_TNT_SCHEMA      => 0x806D;
 
+
 use Mouse::Util::TypeConstraints;
 
     enum DriverType     => [ 'sync', 'async' ];
@@ -656,16 +657,20 @@ sub request {
 sub _now {
     my ($self) = @_;
     return Time::HiRes::time() if $self->driver eq 'sync';
-    return AnyEvent::now();
+    return AnyEvent->now();
 }
 
 sub BUILD {
     my ($self) = @_;
-    if ($self->driver eq 'sync') {
+    goto $self->driver;
+
+    sync:
         require Time::HiRes;
-    } else {
+        return;
+    async:
         require AnyEvent;
-    }
+        return;
 }
+
 __PACKAGE__->meta->make_immutable;
 
