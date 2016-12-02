@@ -12,6 +12,7 @@ use Encode qw(decode encode);
 
 BEGIN {
     use_ok 'DR::Tnt::Test';
+    tarantool_version_check(1.6);
     require_ok 'DR::Tnt';
 }
 

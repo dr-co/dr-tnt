@@ -1,3 +1,9 @@
+libdr-tnt-perl (0.11-1) nowtaxi; urgency=medium
+
+  * Fix tests by CPAN testers report.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Fri, 02 Dec 2016 12:36:51 +0300
+
 libdr-tnt-perl (0.10-1) nowtaxi; urgency=medium
 
   * Add some require/reconnect tests.
