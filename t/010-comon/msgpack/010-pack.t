@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 81;
+use Test::More tests    => 84;
 use Encode qw(decode encode);
 
 
@@ -114,4 +114,28 @@ for my $h ({ map { ($_ => $_) } 1 .. 0x1F }) {
         ),
         "hash16 $len";
 }
+
+
+subtest 'JSON::PP::Boolean' => sub {
+    return plan skip_all => 'JSON::PP::Boolean is not installed'
+        unless eval "require JSON::PP; 1" ;
+    plan tests => 2;
+    is msgpack(JSON::PP::true()), pack('C', 0xC3), 'true';
+    is msgpack(JSON::PP::false()), pack('C', 0xC2), 'false';
+};
+
+subtest 'JSON::XS' => sub {
+    return plan skip_all => 'JSON::XS is not installed'
+        unless eval "require JSON::XS; 1" ;
+    plan tests => 2;
+    is msgpack(JSON::XS::true()), pack('C', 0xC3), 'true';
+    is msgpack(JSON::XS::false()), pack('C', 0xC2), 'false';
+};
+subtest 'Types::Serialiser' => sub {
+    return plan skip_all => 'Types::Serialiser is not installed'
+        unless eval "require Types::Serialiser; 1" ;
+    plan tests => 2;
+    is msgpack(Types::Serialiser::true()), pack('C', 0xC3), 'true';
+    is msgpack(Types::Serialiser::false()), pack('C', 0xC2), 'false';
+};
 

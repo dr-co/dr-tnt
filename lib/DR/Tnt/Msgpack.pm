@@ -306,6 +306,19 @@ sub msgpack($) {
 
         } elsif (Scalar::Util::blessed $v) {
             return $v->TO_MSGPACK if $v->can('TO_MSGPACK');
+            if ($v->can('TO_JSON')) {
+                my $vj = $v->TO_JSON;
+                return pack 'C', 0xC3 if "$vj" eq 'true';
+                return pack 'C', 0xC2;
+            }
+            if ('Types::Serialiser::Boolean' eq ref $v) {
+                return pack 'C', 0xC3 if $v;
+                return pack 'C', 0xC2;
+            }
+            if ('JSON::PP::Boolean' eq ref $v) {
+                return pack 'C', 0xC3 if $v;
+                return pack 'C', 0xC2;
+            }
             croak "Can't msgpack blessed value " . ref $v;
         } else {
             croak "Can't msgpack value " . ref $v;
