@@ -1,3 +1,9 @@
+libdr-tnt-perl (0.13-1) nowtaxi; urgency=medium
+
+  * JSON::XS::Boolean is checked, too.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Fri, 24 Mar 2017 00:56:08 +0300
+
 libdr-tnt-perl (0.12-1) nowtaxi; urgency=medium
 
   * Serialize JSON::XS::true/false

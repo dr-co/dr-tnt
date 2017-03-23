@@ -311,6 +311,10 @@ sub msgpack($) {
                 return pack 'C', 0xC3 if "$vj" eq 'true';
                 return pack 'C', 0xC2;
             }
+            if ('JSON::XS::Boolean' eq ref $v) {
+                return pack 'C', 0xC3 if $v;
+                return pack 'C', 0xC2;
+            }
             if ('Types::Serialiser::Boolean' eq ref $v) {
                 return pack 'C', 0xC3 if $v;
                 return pack 'C', 0xC2;

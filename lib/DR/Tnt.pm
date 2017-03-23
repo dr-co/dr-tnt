@@ -4,7 +4,7 @@ use warnings;
 
 package DR::Tnt;
 use base qw(Exporter);
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 our @EXPORT = qw(tarantool);
 use List::MoreUtils 'any';
 
