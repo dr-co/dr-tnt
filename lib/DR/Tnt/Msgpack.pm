@@ -326,6 +326,9 @@ sub msgpack($) {
                     return pack 'C', 0xC2;
                 }
             }
+            # TO_JSON return pure perl object
+            return msgpack($l[1]) if @l == 2;
+
             croak "Can't msgpack blessed value " . ref $v;
         } else {
             croak "Can't msgpack value " . ref $v;

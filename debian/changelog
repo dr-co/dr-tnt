@@ -1,3 +1,9 @@
+libdr-tnt-perl (0.18-1) nowtaxi; urgency=medium
+
+  * Msgpack recursively all objects than can TO_JSON.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Wed, 14 Jun 2017 15:06:43 +0300
+
 libdr-tnt-perl (0.17-1) nowtaxi; urgency=medium
 
   * Msgpack objects that can 'TO_JSON' and can't TO_MSGPACK.
