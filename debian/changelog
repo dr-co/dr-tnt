@@ -1,3 +1,9 @@
+libdr-tnt-perl (0.16-1) nowtaxi; urgency=medium
+
+  * Autodetect if JSON or JSON::XS is available.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Wed, 14 Jun 2017 12:55:39 +0300
+
 libdr-tnt-perl (0.15-1) nowtaxi; urgency=medium
 
   * Increase test interval (doesn't pass from time to time).

@@ -83,8 +83,13 @@ is_deeply mp_int(123)->TO_JSON, 123, 'int->TO_JSON';
 is_deeply mp_string('Hello')->TO_JSON, 'Hello', 'str->TO_JSON';
 is_deeply mp_blob('Hello, world')->TO_JSON, 'Hello, world', 'blob->TO_JSON';
 
-is_deeply mp_true->TO_JSON, JSON::true(), 'bool->TO_JSON';
-is_deeply mp_false->TO_JSON, JSON::false(), 'bool->TO_JSON';
+if (eval "require JSON::XS; 1") {
+    is_deeply mp_true->TO_JSON, JSON::XS::true(), 'bool->TO_JSON';
+    is_deeply mp_false->TO_JSON, JSON::XS::false(), 'bool->TO_JSON';
+} elsif (eval "require JSON; 1") {
+    is_deeply mp_true->TO_JSON, JSON::true(), 'bool->TO_JSON';
+    is_deeply mp_false->TO_JSON, JSON::false(), 'bool->TO_JSON';
+}
 
 
 is j(mp_true), 'true', 'json encode';
