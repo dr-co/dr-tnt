@@ -22,7 +22,9 @@ sub TO_MSGPACK {
 
 sub TO_JSON {
     my ($self) = @_;
-    return $$self ? 'true' : 'false';
+    require JSON;
+    return JSON::true() if $$self;
+    return JSON::false();
 }
 
 =head1 NAME

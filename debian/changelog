@@ -1,3 +1,9 @@
+libdr-tnt-perl (0.14-1) nowtaxi; urgency=medium
+
+  * TO_JSON methods work properly.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Wed, 14 Jun 2017 12:18:43 +0300
+
 libdr-tnt-perl (0.13-1) nowtaxi; urgency=medium
 
   * JSON::XS::Boolean is checked, too.
