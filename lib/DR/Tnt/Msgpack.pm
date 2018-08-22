@@ -287,6 +287,7 @@ sub looks_like_number($) {
         }
         
         unless ($v eq (0 + $v)) {
+            return 1 if /-?(?:\d+(?:\.\d*)?|\.\d+)$/;
             return 0 unless /^-?(\d+(?:\.\d*)?|\.\d+)e-?\d+$/;
         }
 

@@ -6,7 +6,7 @@ use utf8;
 use open qw(:std :utf8);
 use lib qw(lib ../lib);
 
-use Test::More tests    => 89;
+use Test::More tests    => 90;
 use Encode qw(decode encode);
 
 
@@ -184,4 +184,20 @@ subtest 'Num-Str' => sub {
     is msgpack('-2.1e3'), msgpack(-2100), '-2.1e3';
     is msgpack('-.1e2'), msgpack(-10), '-.1e2';
     is msgpack('-20e-1'), msgpack(-2), '-20e-1';
+};
+
+subtest 'Float' => sub {
+    plan tests => 4;
+    is unpack('C', msgpack('37.798050')), 
+        0xCB,
+        'lon';
+    is unpack('C', msgpack('55.718979')), 
+        0xCB,
+        'lat';
+    is unpack('C', msgpack('-37.798050')), 
+        0xCB,
+        'lon';
+    is unpack('C', msgpack('-55.718979')), 
+        0xCB,
+        'lat';
 };
