@@ -7,6 +7,7 @@ package DR::Tnt::Test;
 use DR::Tnt::Test::TntInstance;
 use IO::Socket::INET;
 use Test::More;
+use Fcntl qw(:flock);
 use base qw(Exporter);
 our @EXPORT = qw(
     free_port
@@ -81,8 +82,18 @@ sub free_port() {
 
 sub start_tarantool {
     my %opts = @_;
-    $opts{-port} = free_port;
-    DR::Tnt::Test::TntInstance->new(%opts);
+
+    my $lock;
+    if (open $lock, '+<', __FILE__) {
+        flock $lock, LOCK_EX;
+    }
+
+    $opts{-port} ||= free_port;
+    my $res = DR::Tnt::Test::TntInstance->new(%opts);
+    if ($lock) {
+        close $lock;
+    }
+    return $res;
 }
 
 1;
